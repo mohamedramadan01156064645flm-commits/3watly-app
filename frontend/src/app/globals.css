@@ -1,0 +1,383 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900;1000&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark, .dark *));
+
+@theme {
+  --color-brand-blue: #1B57E0;
+  --color-brand-blueDark: #1442BC;
+  --color-brand-indigo: #4F46E5;
+  --color-brand-violet: #5B2BE0;
+  --color-brand-green: #12B76A;
+  --color-brand-greenLight: #22C98A;
+  --color-ink: #0B1220;
+  --color-ink-soft: #1B2437;
+  --color-ink-muted: #5B6579;
+  --color-ink-faint: #8A93A5;
+  --color-canvas: #F4F6FD;
+  --color-canvas-alt: #EFF2FC;
+  --color-line: #E6EAF5;
+
+  --color-navy-950: #070D1B;
+  --color-navy-900: #0B1220;
+  --color-navy-800: #0F172A;
+  --color-navy-700: #152238;
+  --color-navy-600: #1B2A45;
+  --color-navy-500: #243657;
+
+  --color-brand-50: #EFF6FF;
+  --color-brand-100: #DBEAFE;
+  --color-brand-200: #BFDBFE;
+  --color-brand-300: #93C5FD;
+  --color-brand-400: #60A5FA;
+  --color-brand-500: #3B82F6;
+  --color-brand-600: #2563EB;
+  --color-brand-700: #1D4ED8;
+  --color-brand-800: #1E40AF;
+  --color-brand-900: #1E3A8A;
+
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-panel: 0 12px 32px rgba(15, 23, 42, 0.10);
+  --shadow-page: 0 18px 40px rgba(2, 6, 23, 0.35);
+  --shadow-tile: 0 8px 20px -10px rgba(27, 45, 105, 0.22);
+  --shadow-cta: 0 18px 36px -14px rgba(43, 62, 224, 0.65);
+  --shadow-field: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+@page {
+  size: A4 portrait;
+  margin: 14mm 16mm;
+}
+
+@media print {
+  /* ── Hide everything except the CV ── */
+  body > *,
+  #__next > * {
+    display: none !important;
+  }
+
+  /* Show only the Next.js root wrapper */
+  #__next {
+    display: block !important;
+  }
+
+  /* Show only the CV article itself */
+  .print-page,
+  .print-region,
+  .cv-scroll-viewport {
+    display: block !important;
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* The .no-print-wrapper is the scroll container — keep it display:block
+     so its children (.print-page) are still rendered, but invisible itself */
+  .no-print-wrapper {
+    display: block !important;
+    overflow: visible !important;
+    max-height: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Hide everything marked no-print */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Force light background & dark ink */
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  /* The CV article: white, no shadow, no rounding */
+  .print-page {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    font-family: Georgia, "Times New Roman", serif !important;
+  }
+
+  /* Force every text node to black */
+  .print-page,
+  .print-page * {
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Keep blue-ish accents (role title, company, links) readable */
+  .print-page [class*="text-blue"] {
+    color: #1d4ed8 !important;
+  }
+
+  /* Dividers */
+  .print-page [class*="border-b"] {
+    border-color: #cbd5e1 !important;
+  }
+
+  /* Bullet dots */
+  .print-page [class*="bg-blue"] {
+    background-color: #2563eb !important;
+  }
+
+  /* Hide lucide icons that are decoration-only (they add clutter) */
+  .print-icon {
+    display: none !important;
+  }
+
+  /* Make contact list tighter without icons */
+  .print-page header ul li {
+    gap: 0.25rem !important;
+  }
+}
+
+:root {
+  --primary: #4338ca;
+  --primary-hover: #3730a3;
+  --secondary: #10b981;
+  --accent: #f59e0b;
+  --dark-slate: #1e293b;
+  --light-bg: #f8fafc;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 90px;
+}
+
+/* Arabic typography */
+html[dir="rtl"], 
+html[lang="ar"],
+html[dir="rtl"] body {
+  font-family: 'Cairo', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: normal !important;
+}
+
+/* English typography */
+html[dir="ltr"],
+html[lang="en"],
+html[dir="ltr"] body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+  background-color: #F8FAFC;
+  color: #1e293b;
+  overflow-x: clip;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+html.dark body {
+  background-color: #060913;
+  color: #F8FAFC;
+}
+
+/* Base dark mode card foundations */
+.dark .bg-white:not(.cv-paper-root) {
+  background-color: #0B1120;
+}
+
+.dark .bg-slate-50 {
+  background-color: #070C18;
+}
+
+.dark .border-slate-200 {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.dark .border-slate-100 {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.dark .text-slate-900:not(.cv-paper-root *) {
+  color: #F8FAFC;
+}
+
+.dark .text-slate-800:not(.cv-paper-root *) {
+  color: #E2E8F0;
+}
+
+.dark .text-slate-700:not(.cv-paper-root *) {
+  color: #CBD5E1;
+}
+
+.dark .text-slate-600:not(.cv-paper-root *),
+.dark .text-slate-500:not(.cv-paper-root *) {
+  color: #94A3B8;
+}
+
+/* Professional Arabic Heading Enhancement */
+html[dir="rtl"] h1,
+html[dir="rtl"] h2,
+html[dir="rtl"] h3,
+html[dir="rtl"] h4 {
+  font-family: 'Cairo', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0 !important;
+  line-height: 1.25;
+}
+
+/* ========================================================================= */
+/* UNIFIED DYNAMIC NAVY/BLUE SCROLLBAR - LIGHT & DARK THEME ADAPTIVE        */
+/* ========================================================================= */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(37, 99, 235, 0.35) transparent;
+}
+
+html.dark * {
+  scrollbar-color: rgba(30, 64, 175, 0.75) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Light Mode: Adaptive Brand Blue */
+::-webkit-scrollbar-thumb {
+  background: rgba(37, 99, 235, 0.35);
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(29, 78, 216, 0.7);
+}
+
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Dark Mode: Deep Dark Navy Blue with subtle electric edge */
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(30, 58, 138, 0.8);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 9999px;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(37, 99, 235, 0.85);
+  border-color: rgba(96, 165, 250, 0.5);
+}
+
+.scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(37, 99, 235, 0.35) transparent;
+}
+
+html.dark .scroll-slim {
+  scrollbar-color: rgba(30, 58, 138, 0.8) transparent;
+}
+
+/* ========================================================================= */
+/* ULTRA-SMOOTH TOAST NOTIFICATIONS (3WATLY CUSTOM THEME)                   */
+/* ========================================================================= */
+[data-sonner-toaster] {
+  font-family: inherit !important;
+}
+
+.custom-3watly-toast {
+  animation: toastPopIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+[data-sonner-toast][data-state="closed"],
+.custom-3watly-toast[data-removed="true"] {
+  animation: toastPopOut 0.25s cubic-bezier(0.4, 0, 1, 1) forwards !important;
+}
+
+@keyframes toastPopIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toastPopOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.92);
+  }
+}
+
+/* ========================================================================= */
+/* CV PREVIEW SCROLL VIEWPORT                                                */
+/* ========================================================================= */
+
+/*
+  The scroll wrapper caps at 80vh so a long CV scrolls nicely
+  inside the builder without pushing the page.
+  On print this element is set to overflow:visible / max-height:none
+  so the article always prints in full.
+*/
+.cv-scroll-viewport {
+  max-height: 82vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Transparent track – scrollbar floats on the document */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(37, 99, 235, 0.35) transparent;
+  /* Smooth inner scroll */
+  scroll-behavior: smooth;
+  /* Give it a subtle inset shadow so content feels contained */
+  border-radius: 1rem;
+}
+
+/* Light-mode webkit scrollbar */
+.cv-scroll-viewport::-webkit-scrollbar {
+  width: 5px;
+}
+.cv-scroll-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cv-scroll-viewport::-webkit-scrollbar-thumb {
+  background: rgba(37, 99, 235, 0.35);
+  border-radius: 9999px;
+}
+.cv-scroll-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(29, 78, 216, 0.7);
+}
+.cv-scroll-viewport::-webkit-scrollbar-button {
+  display: none !important;
+  height: 0 !important;
+}
+
+/* Dark-mode overrides */
+html.dark .cv-scroll-viewport {
+  scrollbar-color: rgba(30, 58, 138, 0.8) transparent;
+}
+html.dark .cv-scroll-viewport::-webkit-scrollbar-thumb {
+  background: rgba(30, 58, 138, 0.8);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+html.dark .cv-scroll-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(37, 99, 235, 0.85);
+  border-color: rgba(96, 165, 250, 0.5);
+}
