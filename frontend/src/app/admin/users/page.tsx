@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users, Search, ChevronLeft, ChevronRight,
-  Shield, UserX, UserCheck, MoreHorizontal, RefreshCw, AlertTriangle, Crown
+  Shield, UserX, UserCheck, MoreHorizontal, RefreshCw, AlertTriangle, Crown,
+  Trash2, X, AlertCircle, CheckCircle2
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -54,6 +55,13 @@ export default function AdminUsersPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
+  // Professional Delete Modal States
+  const [userToDelete, setUserToDelete] = useState<AdminUser | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
   const LIMIT = 20;
 
   const fetchUsers = useCallback(async () => {
@@ -81,9 +89,48 @@ export default function AdminUsersPage() {
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
+  // Close modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && userToDelete && !deleteLoading) {
+        setUserToDelete(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [userToDelete, deleteLoading]);
+
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/admin/users?userId=${userToDelete.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setDeleteError(data.error || (isAr ? 'فشل حذف المستخدم، يرجى المحاولة مرة أخرى.' : 'Failed to delete user. Please try again.'));
+        return;
+      }
+      const targetName = userToDelete.full_name || userToDelete.email;
+      setUserToDelete(null);
+      setSuccessMessage(
+        isAr
+          ? `تم حذف المستخدم "${targetName}" نهائياً بنجاح.`
+          : `User "${targetName}" has been permanently deleted.`
+      );
+      setTimeout(() => setSuccessMessage(null), 4500);
+      await fetchUsers();
+    } catch (e: any) {
+      setDeleteError(isAr ? 'حدث خطأ أثناء الاتصال بالخادم. يرجى المحاولة لاحقاً.' : 'Network error. Please try again.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const handleAction = async (userId: string, updates: { role?: string; accountStatus?: string }) => {
     setActionLoading(userId);
     setOpenMenu(null);
+    setActionError(null);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'PATCH',
@@ -92,12 +139,14 @@ export default function AdminUsersPage() {
       });
       if (!res.ok) {
         const d = await res.json();
-        alert(d.error || 'Action failed');
+        setActionError(d.error || (isAr ? 'فشل تنفيذ الإجراء' : 'Action failed'));
         return;
       }
+      setSuccessMessage(isAr ? 'تم تحديث بيانات المستخدم بنجاح.' : 'User updated successfully.');
+      setTimeout(() => setSuccessMessage(null), 3500);
       await fetchUsers();
     } catch (e) {
-      alert('Network error');
+      setActionError(isAr ? 'خطأ في الاتصال بالشبكة' : 'Network error');
     } finally {
       setActionLoading(null);
     }
@@ -107,6 +156,31 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
+      {/* Notifications */}
+      {successMessage && (
+        <div className="flex items-center justify-between p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-xs sm:text-sm font-semibold animate-in fade-in shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+            <span>{successMessage}</span>
+          </div>
+          <button type="button" onClick={() => setSuccessMessage(null)} className="p-1 rounded-lg hover:bg-emerald-500/15 cursor-pointer">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {actionError && (
+        <div className="flex items-center justify-between p-4 rounded-2xl bg-red-500/10 border border-red-500/25 text-red-600 dark:text-red-400 text-xs sm:text-sm font-semibold animate-in fade-in shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+            <span>{actionError}</span>
+          </div>
+          <button type="button" onClick={() => setActionError(null)} className="p-1 rounded-lg hover:bg-red-500/15 cursor-pointer">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-2xl bg-gradient-to-r from-blue-50/80 via-white/70 to-blue-100/60 dark:bg-gradient-to-r dark:from-[#0D2452]/60 dark:via-[#091738]/70 dark:to-[#061026]/80 backdrop-blur-2xl border border-slate-200/80 dark:border-cyan-500/25 shadow-xl shadow-cyan-950/20">
         <div>
@@ -298,28 +372,14 @@ export default function AdminUsersPage() {
                             {/* Delete User */}
                             <button
                               type="button"
-                              onClick={async () => {
-                                if (confirm(isAr ? 'هل أنت متأكد من حذف هذا المستخدم نهائياً؟' : 'Are you sure you want to permanently delete this user?')) {
-                                  setActionLoading(u.id);
-                                  setOpenMenu(null);
-                                  try {
-                                    const res = await fetch(`/api/admin/users?userId=${u.id}`, { method: 'DELETE' });
-                                    if (!res.ok) {
-                                      const d = await res.json();
-                                      alert(d.error || 'Action failed');
-                                    } else {
-                                      await fetchUsers();
-                                    }
-                                  } catch (e) {
-                                    alert('Network error');
-                                  } finally {
-                                    setActionLoading(null);
-                                  }
-                                }
+                              onClick={() => {
+                                setOpenMenu(null);
+                                setDeleteError(null);
+                                setUserToDelete(u);
                               }}
                               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer text-start"
                             >
-                              <UserX className="w-4 h-4" />
+                              <Trash2 className="w-4 h-4" />
                               {isAr ? 'حذف المستخدم' : 'Delete User'}
                             </button>
 
@@ -406,6 +466,132 @@ export default function AdminUsersPage() {
           </div>
         )}
       </div>
+
+      {/* Professional Delete User Confirmation Modal */}
+      {userToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/70 dark:bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deleteLoading) {
+              setUserToDelete(null);
+            }
+          }}
+        >
+          <div
+            className="relative w-full max-w-lg rounded-3xl bg-white dark:bg-[#070D1F] border border-slate-200/90 dark:border-red-500/25 shadow-2xl shadow-red-950/40 overflow-hidden animate-in zoom-in-95 duration-200"
+            dir={isAr ? 'rtl' : 'ltr'}
+          >
+            {/* Top Ambient Glow */}
+            <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-80 h-36 bg-gradient-to-b from-red-500/20 via-rose-500/10 to-transparent blur-3xl pointer-events-none" />
+
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 sm:p-6 pb-0 relative z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-red-500/10 dark:bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-500 dark:text-red-400 shadow-[0_0_24px_rgba(239,68,68,0.25)] shrink-0">
+                  <Trash2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
+                    {isAr ? 'تأكيد حذف الحساب نهائياً' : 'Confirm Permanent Deletion'}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {isAr ? 'عملية حساسة ولا يمكن التراجع عنها' : 'Critical and irreversible action'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => !deleteLoading && setUserToDelete(null)}
+                disabled={deleteLoading}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/8 transition-colors cursor-pointer disabled:opacity-40"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 sm:p-6 space-y-4 relative z-10">
+              {/* Target User Info Card */}
+              <div className="p-4 rounded-2xl bg-slate-50/90 dark:bg-white/4 border border-slate-200/80 dark:border-white/8 flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-red-500 to-rose-700 text-white font-black text-sm flex items-center justify-center shadow-xs shrink-0">
+                  {(userToDelete.full_name || userToDelete.email)[0]?.toUpperCase() ?? '?'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                      {userToDelete.full_name || userToDelete.email.split('@')[0]}
+                    </p>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${ROLE_BADGE[userToDelete.role] ?? ROLE_BADGE.user}`}>
+                      {userToDelete.role.toUpperCase()}
+                    </span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${STATUS_BADGE[userToDelete.account_status] ?? STATUS_BADGE.active}`}>
+                      {userToDelete.account_status === 'active' ? (isAr ? 'نشط' : 'Active') : (isAr ? 'معلق' : 'Suspended')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5 truncate">
+                    {userToDelete.email}
+                  </p>
+                </div>
+              </div>
+
+              {/* Warning Notice Card */}
+              <div className="p-4 rounded-2xl bg-red-500/8 dark:bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-300 text-xs leading-relaxed flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold text-red-600 dark:text-red-400">
+                    {isAr ? 'تحذير أمني هام:' : 'Important Security Warning:'}
+                  </p>
+                  <p className="text-slate-600 dark:text-slate-300 text-[11.5px] leading-normal">
+                    {isAr
+                      ? 'سيتم حذف هذا الحساب نهائياً من قاعدة البيانات مع كافة السير الذاتية (CVs)، ونتائج التحليلات، وسجلات النشاط المرتبطة به. لا يمكن استعادة هذه البيانات بعد إتمام الحذف.'
+                      : 'This account will be permanently deleted from the database along with all associated CVs, analysis results, and activity records. This action cannot be reversed.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Error banner inside modal */}
+              {deleteError && (
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-600 dark:text-red-400 text-xs animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <p className="font-medium">{deleteError}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-end gap-3 p-5 sm:p-6 pt-3 border-t border-slate-100 dark:border-white/8 bg-slate-50/50 dark:bg-white/2 relative z-10">
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                disabled={deleteLoading}
+                className="px-4.5 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/6 transition-colors cursor-pointer disabled:opacity-40"
+              >
+                {isAr ? 'إلغاء الأمر' : 'Cancel'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deleteLoading}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 via-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-red-600/30 hover:shadow-red-600/40 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {deleteLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>{isAr ? 'جاري الحذف...' : 'Deleting...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>{isAr ? 'نعم، احذف نهائياً' : 'Yes, Delete Permanently'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

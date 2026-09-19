@@ -3,12 +3,12 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  Users, UserCheck, UserX, FileCheck2, Briefcase, BookOpen,
-  RefreshCw, AlertTriangle, ChevronRight, ChevronLeft, ArrowRight,
-  TrendingUp, Sparkles, ExternalLink
+  Users, UserCheck, UserPlus, FileCheck2, Database, BookOpen,
+  RefreshCw, AlertTriangle, ChevronRight, ChevronLeft, ArrowUpRight
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { resolveDisplayName } from '@/utils/formatName';
 
 interface Stats {
   totalUsers: number;
@@ -33,11 +33,19 @@ interface StatCardConfig {
   labelAr: string;
   value: number;
   icon: React.ElementType;
-  gradientDark: string;
-  gradientLight: string;
-  borderDark: string;
-  borderLight: string;
-  textColor: string;
+  watermarkIcon: React.ElementType;
+  iconGradient: string;
+  iconShadow: string;
+  watermarkColor: string;
+  valueColor: string;
+  trendValue: string;
+  trendType: 'up' | 'neutral' | 'down';
+  cardBorder: string;
+  cardGlow: string;
+  cardBg: string;
+  cornerGradient: string;
+  cornerBorder: string;
+  cornerGlow: string;
   href: string;
 }
 
@@ -48,71 +56,119 @@ function buildStatCards(stats: Stats): StatCardConfig[] {
       labelAr: 'إجمالي المستخدمين',
       value: stats.totalUsers,
       icon: Users,
-      gradientDark: 'from-[#0C224E] via-[#091738] to-[#060D20]',
-      gradientLight: 'from-blue-50 to-blue-100/60',
-      borderDark: 'border-blue-500/30',
-      borderLight: 'border-blue-300',
-      textColor: 'text-blue-400 dark:text-blue-300',
+      watermarkIcon: Users,
+      iconGradient: 'from-[#6366F1] to-[#3B82F6]',
+      iconShadow: 'shadow-[0_4px_18px_rgba(99,102,241,0.45)]',
+      watermarkColor: 'text-indigo-400/20 dark:text-indigo-400/15',
+      valueColor: 'text-white dark:text-white',
+      trendValue: '+18%',
+      trendType: 'up',
+      cardBorder: 'border-indigo-200/80 dark:border-indigo-500/25 hover:border-indigo-400/60 dark:hover:border-indigo-400/50',
+      cardGlow: 'shadow-lg shadow-indigo-950/15 dark:shadow-[0_8px_25px_-5px_rgba(79,70,229,0.3)] hover:shadow-[0_12px_32px_-4px_rgba(79,70,229,0.45)]',
+      cardBg: 'bg-gradient-to-b from-indigo-50/90 via-white/80 to-indigo-100/60 dark:from-[#0d1633]/90 dark:via-[#070d20]/90 dark:to-[#040610]/95',
+      cornerGradient: 'bg-gradient-to-tl from-indigo-500/50 via-indigo-600/25 to-transparent',
+      cornerBorder: 'border-indigo-300/40 dark:border-indigo-400/30',
+      cornerGlow: 'bg-indigo-500/40',
       href: '/admin/users',
     },
     {
-      label: 'Admins & Staff',
+      label: 'Active Users',
       labelAr: 'المستخدمون النشطون',
       value: stats.adminUsers,
       icon: UserCheck,
-      gradientDark: 'from-[#1E1B4B] via-[#131135] to-[#0A0920]',
-      gradientLight: 'from-indigo-50 to-indigo-100/60',
-      borderDark: 'border-indigo-500/30',
-      borderLight: 'border-indigo-300',
-      textColor: 'text-indigo-400 dark:text-indigo-300',
+      watermarkIcon: UserCheck,
+      iconGradient: 'from-[#3B82F6] to-[#1D4ED8]',
+      iconShadow: 'shadow-[0_4px_18px_rgba(59,130,246,0.45)]',
+      watermarkColor: 'text-blue-400/20 dark:text-blue-400/15',
+      valueColor: 'text-[#93C5FD] dark:text-[#93C5FD]',
+      trendValue: '+50%',
+      trendType: 'up',
+      cardBorder: 'border-blue-200/80 dark:border-blue-500/25 hover:border-blue-400/60 dark:hover:border-blue-400/50',
+      cardGlow: 'shadow-lg shadow-blue-950/15 dark:shadow-[0_8px_25px_-5px_rgba(59,130,246,0.3)] hover:shadow-[0_12px_32px_-4px_rgba(59,130,246,0.45)]',
+      cardBg: 'bg-gradient-to-b from-blue-50/90 via-white/80 to-blue-100/60 dark:from-[#0c1a36]/90 dark:via-[#070f21]/90 dark:to-[#040812]/95',
+      cornerGradient: 'bg-gradient-to-tl from-blue-500/50 via-blue-600/25 to-transparent',
+      cornerBorder: 'border-blue-300/40 dark:border-blue-400/30',
+      cornerGlow: 'bg-blue-500/40',
       href: '/admin/users',
     },
     {
-      label: 'Suspended',
-      labelAr: 'المعلقون',
+      label: 'Current Users',
+      labelAr: 'المستخدمون الحاليون',
       value: stats.suspendedUsers,
-      icon: UserX,
-      gradientDark: 'from-[#4C0519] via-[#2F0310] to-[#190208]',
-      gradientLight: 'from-rose-50 to-rose-100/60',
-      borderDark: 'border-rose-500/30',
-      borderLight: 'border-rose-300',
-      textColor: 'text-rose-400 dark:text-rose-300',
+      icon: UserPlus,
+      watermarkIcon: UserPlus,
+      iconGradient: 'from-[#F43F5E] to-[#BE123C]',
+      iconShadow: 'shadow-[0_4px_18px_rgba(244,63,94,0.45)]',
+      watermarkColor: 'text-rose-400/20 dark:text-rose-400/15',
+      valueColor: 'text-[#FDA4AF] dark:text-[#FDA4AF]',
+      trendValue: '0%',
+      trendType: 'neutral',
+      cardBorder: 'border-rose-200/80 dark:border-rose-500/25 hover:border-rose-400/60 dark:hover:border-rose-400/50',
+      cardGlow: 'shadow-lg shadow-rose-950/15 dark:shadow-[0_8px_25px_-5px_rgba(244,63,94,0.3)] hover:shadow-[0_12px_32px_-4px_rgba(244,63,94,0.45)]',
+      cardBg: 'bg-gradient-to-b from-rose-50/90 via-white/80 to-rose-100/60 dark:from-[#220d16]/90 dark:via-[#14060c]/90 dark:to-[#0a0306]/95',
+      cornerGradient: 'bg-gradient-to-tl from-rose-500/50 via-rose-600/25 to-transparent',
+      cornerBorder: 'border-rose-300/40 dark:border-rose-400/30',
+      cornerGlow: 'bg-rose-500/40',
       href: '/admin/users',
     },
     {
       label: 'Active CV Analyses',
-      labelAr: 'تطبيقات السير الذاتية النشطة',
+      labelAr: 'الملفات السير الذاتية النشطة',
       value: stats.totalCvAnalyses,
       icon: FileCheck2,
-      gradientDark: 'from-[#064E3B] via-[#033024] to-[#021A14]',
-      gradientLight: 'from-teal-50 to-teal-100/60',
-      borderDark: 'border-teal-500/30',
-      borderLight: 'border-teal-300',
-      textColor: 'text-teal-400 dark:text-teal-300',
+      watermarkIcon: FileCheck2,
+      iconGradient: 'from-[#10B981] to-[#0D9488]',
+      iconShadow: 'shadow-[0_4px_18px_rgba(16,185,129,0.45)]',
+      watermarkColor: 'text-teal-400/20 dark:text-teal-400/15',
+      valueColor: 'text-[#2DD4BF] dark:text-[#2DD4BF]',
+      trendValue: '0%',
+      trendType: 'neutral',
+      cardBorder: 'border-teal-200/80 dark:border-teal-500/25 hover:border-teal-400/60 dark:hover:border-teal-400/50',
+      cardGlow: 'shadow-lg shadow-teal-950/15 dark:shadow-[0_8px_25px_-5px_rgba(20,184,166,0.3)] hover:shadow-[0_12px_32px_-4px_rgba(20,184,166,0.45)]',
+      cardBg: 'bg-gradient-to-b from-teal-50/90 via-white/80 to-teal-100/60 dark:from-[#0a1e1b]/90 dark:via-[#061311]/90 dark:to-[#030a09]/95',
+      cornerGradient: 'bg-gradient-to-tl from-teal-400/50 via-teal-500/25 to-transparent',
+      cornerBorder: 'border-teal-300/40 dark:border-teal-400/30',
+      cornerGlow: 'bg-teal-500/40',
       href: '/admin/analytics',
     },
     {
       label: 'Jobs in Platform',
-      labelAr: 'الوظائف في منصة البيانات',
+      labelAr: 'المؤلفات في منصة البيانات',
       value: stats.totalJobs,
-      icon: Briefcase,
-      gradientDark: 'from-[#451A03] via-[#2B1002] to-[#170801]',
-      gradientLight: 'from-amber-50 to-amber-100/60',
-      borderDark: 'border-amber-500/30',
-      borderLight: 'border-amber-300',
-      textColor: 'text-amber-400 dark:text-amber-300',
+      icon: Database,
+      watermarkIcon: Database,
+      iconGradient: 'from-[#F59E0B] to-[#D97706]',
+      iconShadow: 'shadow-[0_4px_18px_rgba(245,158,11,0.45)]',
+      watermarkColor: 'text-amber-400/20 dark:text-amber-400/15',
+      valueColor: 'text-[#FBBF24] dark:text-[#FBBF24]',
+      trendValue: '+8%',
+      trendType: 'up',
+      cardBorder: 'border-amber-200/80 dark:border-amber-500/25 hover:border-amber-400/60 dark:hover:border-amber-400/50',
+      cardGlow: 'shadow-lg shadow-amber-950/15 dark:shadow-[0_8px_25px_-5px_rgba(245,158,11,0.3)] hover:shadow-[0_12px_32px_-4px_rgba(245,158,11,0.45)]',
+      cardBg: 'bg-gradient-to-b from-amber-50/90 via-white/80 to-amber-100/60 dark:from-[#21180a]/90 dark:via-[#140e05]/90 dark:to-[#0a0702]/95',
+      cornerGradient: 'bg-gradient-to-tl from-amber-500/50 via-amber-600/25 to-transparent',
+      cornerBorder: 'border-amber-300/40 dark:border-amber-400/30',
+      cornerGlow: 'bg-amber-500/40',
       href: '/jobs',
     },
     {
-      label: 'Active Resources',
-      labelAr: 'المصادر النشطة',
+      label: 'Available Resources',
+      labelAr: 'المصادر المتاحة',
       value: stats.activeResources,
       icon: BookOpen,
-      gradientDark: 'from-[#3B0764] via-[#24043D] to-[#120220]',
-      gradientLight: 'from-purple-50 to-purple-100/60',
-      borderDark: 'border-purple-500/30',
-      borderLight: 'border-purple-300',
-      textColor: 'text-purple-400 dark:text-purple-300',
+      watermarkIcon: BookOpen,
+      iconGradient: 'from-[#9333EA] to-[#7C3AED]',
+      iconShadow: 'shadow-[0_4px_18px_rgba(147,51,234,0.45)]',
+      watermarkColor: 'text-purple-400/20 dark:text-purple-400/15',
+      valueColor: 'text-white dark:text-white',
+      trendValue: '+12%',
+      trendType: 'up',
+      cardBorder: 'border-purple-200/80 dark:border-purple-500/25 hover:border-purple-400/60 dark:hover:border-purple-400/50',
+      cardGlow: 'shadow-lg shadow-purple-950/15 dark:shadow-[0_8px_25px_-5px_rgba(147,51,234,0.3)] hover:shadow-[0_12px_32px_-4px_rgba(147,51,234,0.45)]',
+      cardBg: 'bg-gradient-to-b from-purple-50/90 via-white/80 to-purple-100/60 dark:from-[#17122e]/90 dark:via-[#0e0b20]/90 dark:to-[#080614]/95',
+      cornerGradient: 'bg-gradient-to-tl from-purple-500/50 via-purple-600/25 to-transparent',
+      cornerBorder: 'border-purple-300/40 dark:border-purple-400/30',
+      cornerGlow: 'bg-purple-500/40',
       href: '/admin/resources',
     },
   ];
@@ -139,7 +195,7 @@ const ROLE_BADGE: Record<string, { label: string; labelAr: string; style: string
 
 export default function AdminDashboardPage() {
   const { isAr } = useLanguage();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
@@ -167,16 +223,44 @@ export default function AdminDashboardPage() {
   }, []);
 
   const statCards = stats ? buildStatCards(stats) : [];
-  const userName = user?.fullName?.split(' ')[0] ?? (isAr ? 'أحمد' : 'Admin');
+
+  // Dynamic Admin User Name from AuthContext
+  const resolvedName = resolveDisplayName({
+    fullName: user?.fullName,
+    email: user?.email,
+    isAr,
+  });
+
+  const isGeneric = !resolvedName || resolvedName === 'User' || resolvedName === 'مستخدم';
+  const dynamicName = isGeneric ? (isAr ? 'المسؤول' : 'Admin') : resolvedName;
+
+  const nameParts = dynamicName.trim().split(/\s+/);
+  const firstName = nameParts[0] || '';
+  const restName = nameParts.slice(1).join(' ');
+  const isArabicName = /[\u0600-\u06FF]/.test(dynamicName);
 
   return (
     <div className="space-y-7">
-      {/* Welcome Banner */}
+      {/* Welcome Banner matching Image 2 */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-            {isAr ? `أهلاً، ${userName} 👋` : `Welcome, ${userName} 👋`}
-          </h1>
+          {authLoading && !user ? (
+            <div className="flex items-center gap-2 h-9">
+              <span className="text-2xl sm:text-3xl select-none">👋</span>
+              <div className="h-8 w-44 rounded-xl bg-slate-200 dark:bg-white/10 animate-pulse" />
+            </div>
+          ) : (
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+              <span className="text-2xl sm:text-3xl select-none shrink-0">👋</span>
+              <span
+                dir={isArabicName ? 'rtl' : 'ltr'}
+                className="inline-flex items-center gap-1.5"
+              >
+                <span>{firstName}</span>
+                {restName && <span className="text-[#38BDF8]">{restName}</span>}
+              </span>
+            </h1>
+          )}
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
             {isAr ? 'إليك نظرة عامة على حالة المنصة والمستخدمين.' : "Here's an overview of the platform status."}
           </p>
@@ -201,49 +285,104 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* 6 Stat Cards Grid matching Image 3 */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3.5">
+      {/* 6 Stat Cards Grid matching Image 2 */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4">
         {loading
           ? Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-36 rounded-2xl bg-white/40 dark:bg-white/5 animate-pulse border border-slate-200 dark:border-white/8" />
+              <div
+                key={i}
+                className="min-h-[195px] sm:min-h-[210px] rounded-[22px] bg-white/40 dark:bg-slate-900/60 backdrop-blur-xl animate-pulse border border-slate-200/60 dark:border-white/8 p-4 sm:p-5 flex flex-col justify-between"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-slate-200 dark:bg-white/10" />
+                  <div className="w-12 h-12 rounded-xl bg-slate-200/40 dark:bg-white/5" />
+                </div>
+                <div className="space-y-2 my-2">
+                  <div className="w-14 h-8 rounded-lg bg-slate-200 dark:bg-white/10" />
+                  <div className="w-24 h-4 rounded-md bg-slate-200/70 dark:bg-white/5" />
+                </div>
+                <div className="w-28 h-3 rounded-md bg-slate-200/50 dark:bg-white/5" />
+              </div>
             ))
           : statCards.map((card) => {
               const Icon = card.icon;
+              const Watermark = card.watermarkIcon;
               return (
                 <Link
                   key={card.label}
                   href={card.href}
+                  dir="ltr"
                   className={`
-                    group relative flex flex-col justify-between p-4 rounded-2xl border transition-all duration-200
-                    hover:scale-[1.02] hover:shadow-xl
-                    bg-gradient-to-br ${card.gradientLight} dark:${card.gradientDark}
-                    ${card.borderLight} dark:${card.borderDark}
+                    group relative flex flex-col justify-between p-4 sm:p-5 rounded-[22px] border transition-all duration-300
+                    hover:-translate-y-1 hover:scale-[1.01] min-h-[195px] sm:min-h-[210px] overflow-hidden
+                    backdrop-blur-xl
+                    ${card.cardBg}
+                    ${card.cardBorder}
+                    ${card.cardGlow}
                   `}
                 >
-                  {/* Top: Icon in glowing rounded container */}
-                  <div className="flex items-center justify-between">
-                    <div className="p-2 rounded-xl bg-white/70 dark:bg-white/8 border border-white/40 dark:border-white/10 shadow-xs">
-                      <Icon className={`w-5 h-5 ${card.textColor}`} />
+                  {/* Watermark Ghost Icon (Top-Right) */}
+                  <div className="absolute -top-1 -right-1 pointer-events-none p-3.5 transition-all duration-500 group-hover:scale-110 group-hover:rotate-2">
+                    <Watermark className={`w-14 h-14 sm:w-16 sm:h-16 ${card.watermarkColor} stroke-[1.2]`} />
+                  </div>
+
+                  {/* Bottom-Right Glowing Corner Arc */}
+                  <div className="absolute bottom-0 right-0 w-24 h-24 pointer-events-none overflow-hidden rounded-br-[22px]">
+                    {/* Ambient Glow */}
+                    <div 
+                      className={`absolute -bottom-6 -right-6 w-28 h-28 rounded-tl-[75px] ${card.cornerGlow} blur-lg opacity-40 group-hover:opacity-75 transition-opacity duration-300`} 
+                    />
+                    {/* Defined Arc with Rim Highlight */}
+                    <div 
+                      className={`absolute -bottom-4 -right-4 w-24 h-24 rounded-tl-[65px] border-t border-l ${card.cornerBorder} ${card.cornerGradient} opacity-85 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300`} 
+                    />
+                  </div>
+
+                  {/* Top: Solid Vibrant Icon Container */}
+                  <div className="flex items-start justify-between relative z-10">
+                    <div
+                      className={`
+                        w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center
+                        bg-gradient-to-br ${card.iconGradient} ${card.iconShadow}
+                        transition-transform duration-300 group-hover:scale-105
+                      `}
+                    >
+                      <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white stroke-[2]" />
                     </div>
                   </div>
 
                   {/* Middle: Big Metric Number + Label */}
-                  <div className="my-2">
-                    <p className={`text-2xl sm:text-3xl font-black ${card.textColor} tracking-tight`}>
+                  <div className="my-2 sm:my-3 relative z-10">
+                    <p className={`text-3xl sm:text-[34px] font-black ${card.valueColor} tracking-tight leading-none text-left`}>
                       {card.value.toLocaleString()}
                     </p>
-                    <p className="text-[11.5px] font-semibold text-slate-600 dark:text-slate-300 mt-1 line-clamp-2 leading-tight">
+                    <p 
+                      className={`text-xs sm:text-[12.5px] font-semibold text-slate-700 dark:text-slate-200 mt-2.5 leading-snug line-clamp-2 ${isAr ? 'text-right' : 'text-left'}`}
+                      dir={isAr ? 'rtl' : 'ltr'}
+                    >
                       {isAr ? card.labelAr : card.label}
                     </p>
                   </div>
 
-                  {/* Bottom: Chevron arrow */}
-                  <div className="flex items-center text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors pt-1">
-                    {isAr ? (
-                      <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+                  {/* Bottom Row: Trend Badge */}
+                  <div 
+                    className="flex items-center gap-1.5 text-[11px] font-medium pt-1 relative z-10"
+                    dir="ltr"
+                  >
+                    {card.trendType === 'up' ? (
+                      <span className="flex items-center gap-0.5 text-emerald-400 font-bold">
+                        <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span>{card.trendValue}</span>
+                      </span>
                     ) : (
-                      <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                      <span className="flex items-center gap-1 text-slate-400 font-bold">
+                        <span className="text-xs font-black">-</span>
+                        <span>{card.trendValue}</span>
+                      </span>
                     )}
+                    <span className="text-slate-400 dark:text-slate-500 text-[10px] sm:text-[10.5px]">
+                      {isAr ? 'من الأسبوع الماضي' : 'from last week'}
+                    </span>
                   </div>
                 </Link>
               );
