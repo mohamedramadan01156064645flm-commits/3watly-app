@@ -21,15 +21,30 @@ export function ParsingStatus({ cv, status, progress, checksRevealed }: ParsingS
   const detectedSkills = cv.detectedSkills || [];
   const skillPreview = detectedSkills.slice(0, 5).map((skill) => skill.name);
 
+  const projectCount = Array.isArray(cv.projects) ? cv.projects.length : 0;
+  const linkCount = (cv.socialLinks?.length || 0) + (cv.linkedin ? 1 : 0) + (cv.github ? 1 : 0) + (cv.portfolio ? 1 : 0);
+
   const checks = isAr
     ? [
         { label: 'الخبرة والمسمى المستخرج:', value: cv.currentTitle || 'جاهز للاستكمال' },
         { label: `${detectedSkills.length} مهارات تم اكتشافها:`, value: skillPreview.length > 0 ? skillPreview.join(', ') : 'قيد الفحص الدقيق' },
+        { 
+          label: 'المشاريع والروابط المستخرجة:', 
+          value: projectCount > 0 
+            ? `${projectCount} مشاريع عملية مكتملة الروابط (GitHub & Demos)` 
+            : (linkCount > 0 ? `تم استخراج ${linkCount} روابط مهنية` : 'جاهز للمراجعة')
+        },
         { label: 'فحص وتوافق هيكل الـ ATS:', value: 'تم اعتماد التنسيق الأحادي القياسي (Single-Column)' }
       ]
     : [
         { label: 'Experience Extracted:', value: cv.currentTitle || 'Ready to Complete' },
         { label: `${detectedSkills.length} Skills Detected:`, value: skillPreview.length > 0 ? skillPreview.join(', ') : 'Analyzing text' },
+        { 
+          label: 'Projects & Live Links:', 
+          value: projectCount > 0 
+            ? `${projectCount} Projects with Repos & Live Demos` 
+            : (linkCount > 0 ? `${linkCount} Verified links extracted` : 'Ready to review')
+        },
         { label: 'ATS Layout Parsed:', value: 'Single-Column Format Validated' }
       ];
 

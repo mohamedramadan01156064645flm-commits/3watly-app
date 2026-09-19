@@ -34,10 +34,15 @@ export interface CopilotContext {
   atsScore?: number;
   experiencesCount: number;
   projectsCount: number;
+  experienceDetails?: string;
+  projectsDetails?: string;
+  educationDetails?: string;
   topRankedJobs: RankedJob[];
   recentHistorySummary: string;
   currentPageContext?: string;
   hasCv: boolean;
+  attachmentName?: string;
+  attachedDocumentText?: string;
 }
 
 export async function buildCopilotContext(
@@ -52,6 +57,9 @@ export async function buildCopilotContext(
   let atsScore: number | undefined;
   let experiencesCount = 0;
   let projectsCount = 0;
+  let experienceDetails = '';
+  let projectsDetails = '';
+  let educationDetails = '';
   let hasCv = false;
 
   // 1. Check active CV from client payload first
@@ -62,8 +70,31 @@ export async function buildCopilotContext(
     userSkills = Array.isArray(acv.skills) ? acv.skills : [];
     cvSummary = acv.summary || '';
     experiencesCount = Array.isArray(acv.experiences) ? acv.experiences.length : 0;
-    projectsCount = Array.isArray(acv.projects) ? acv.projects.length : 0;
-    if (acv.atsReport?.score) atsScore = acv.atsReport.score;
+    if (acv.atsScore !== undefined) atsScore = acv.atsScore;
+    else if (acv.atsReport?.score !== undefined) atsScore = acv.atsReport.score;
+
+    if (Array.isArray(acv.experiences) && acv.experiences.length > 0) {
+      experienceDetails = acv.experiences.map((exp: any, i: number) => {
+        const bullets = Array.isArray(exp.bullets) ? exp.bullets.map((b: string) => `    - ${b}`).join('\n') : '';
+        return `  ${i + 1}. ${exp.role || exp.title || 'Role'} at ${exp.company || 'Company'} (${exp.startDate || exp.period || ''} - ${exp.endDate || ''})${bullets ? '\n' + bullets : ''}`;
+      }).join('\n');
+    }
+
+    if (Array.isArray(acv.projects) && acv.projects.length > 0) {
+      projectsDetails = acv.projects.map((prj: any, i: number) => {
+        const bullets = Array.isArray(prj.bullets)
+          ? prj.bullets.map((b: string) => `    - ${b}`).join('\n')
+          : (prj.description ? `    - ${prj.description}` : '');
+        const links = [prj.github ? `GitHub: ${prj.github}` : '', prj.link ? `Demo: ${prj.link}` : ''].filter(Boolean).join(' | ');
+        return `  ${i + 1}. ${prj.title} [${(prj.technologies || []).join(', ')}] ${links ? `(${links})` : ''}${bullets ? '\n' + bullets : ''}`;
+      }).join('\n');
+    }
+
+    if (Array.isArray(acv.education) && acv.education.length > 0) {
+      educationDetails = acv.education.map((edu: any) =>
+        `  - ${edu.degree || ''} at ${edu.institution || edu.school || ''} (${edu.startDate || ''} - ${edu.endDate || edu.period || ''})`
+      ).join('\n');
+    }
   } else if (supabase && userId && !userId.startsWith('guest')) {
     // 2. Fetch from DB
     try {
@@ -181,6 +212,13 @@ export async function buildCopilotContext(
       .join('\n');
   }
 
+  const attachmentName = rawBody.attachment || undefined;
+  const attachedDocumentText =
+    rawBody.attachmentText ||
+    rawBody.attachmentData?.rawText ||
+    rawBody.activeCv?.rawText ||
+    undefined;
+
   return {
     userName,
     targetRole,
@@ -189,9 +227,14 @@ export async function buildCopilotContext(
     atsScore,
     experiencesCount,
     projectsCount,
+    experienceDetails,
+    projectsDetails,
+    educationDetails,
     topRankedJobs: rankedJobs.slice(0, 6),
     recentHistorySummary,
     currentPageContext: rawBody.currentPage || '/copilot',
     hasCv,
+    attachmentName,
+    attachedDocumentText,
   };
 }

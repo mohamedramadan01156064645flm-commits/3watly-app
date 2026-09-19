@@ -57,6 +57,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { CompanyLogo } from '@/components/brand/CompanyLogo';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import type { JobItem } from '@/data/jobs';
+import { toast } from 'sonner';
 import {
   cleanEnglishOverview,
   cleanArabicOverview,
@@ -65,6 +66,9 @@ import {
   cleanEnglishRequirements,
   cleanArabicRequirements
 } from '@/utils/jobLocalization';
+import { getUserSkillsFromStorage, computeJobMatch } from '@/utils/jobMatching';
+import { isJobBookmarked, toggleJobBookmark, SAVED_JOBS_EVENT } from '@/utils/jobBookmarks';
+
 
 export default function JobDetailsPage() {
   const params = useParams();
@@ -72,25 +76,74 @@ export default function JobDetailsPage() {
   const { isAr } = useLanguage();
   const [activeTab, setActiveTab] = useState('overview');
   const [isSaved, setIsSaved] = useState(false);
-  const [applied, setApplied] = useState(false);
 
   const jobId = params?.id as string;
+
+  // Hydrate isSaved from shared bookmark utility on client mount
+  React.useEffect(() => {
+    if (jobId) setIsSaved(isJobBookmarked(jobId));
+  }, [jobId]);
+
+  // Sync if bookmarks change in other components
+  React.useEffect(() => {
+    const handler = () => { if (jobId) setIsSaved(isJobBookmarked(jobId)); };
+    window.addEventListener(SAVED_JOBS_EVENT, handler);
+    window.addEventListener('storage', handler);
+    return () => {
+      window.removeEventListener(SAVED_JOBS_EVENT, handler);
+      window.removeEventListener('storage', handler);
+    };
+  }, [jobId]);
+
+  const toggleSave = () => {
+    if (!jobId) return;
+    const { isSaved: nowSaved } = toggleJobBookmark(jobId);
+    setIsSaved(nowSaved);
+    if (nowSaved) {
+      toast.success(isAr ? 'تم حفظ الوظيفة في قائمة المحفوظات ⭐' : 'Job saved to your bookmarks ⭐');
+    } else {
+      toast.info(isAr ? 'تمت إزالة الوظيفة من المحفوظات' : 'Job removed from bookmarks');
+    }
+  };
+
   // Start with empty placeholder — real data replaces it on load. Content is only rendered when !loadingJob && !notFound
   const [job, setJob] = useState<JobItem>({} as JobItem);
   const [similarJobs, setSimilarJobs] = useState<JobItem[]>([]);
   const [loadingJob, setLoadingJob] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [hasUserCv, setHasUserCv] = useState(false);
+
+  const reloadUserSkills = React.useCallback(() => {
+    const info = getUserSkillsFromStorage();
+    setHasUserCv(info.hasCv);
+    return info;
+  }, []);
 
   React.useEffect(() => {
     let mounted = true;
     if (jobId) {
       setLoadingJob(true);
-      fetch(`/api/jobs/${jobId}`)
+      const { skills, targetRole, hasCv } = reloadUserSkills();
+      setHasUserCv(hasCv);
+
+      const queryParams = new URLSearchParams();
+      if (skills.length > 0) queryParams.set('skills', skills.join(','));
+      if (targetRole) queryParams.set('targetRole', targetRole);
+      const qs = queryParams.toString();
+      const url = `/api/jobs/${jobId}${qs ? `?${qs}` : ''}`;
+
+      fetch(url)
         .then((res) => res.json())
         .then((data) => {
           if (mounted) {
             if (data?.job) {
-              setJob(data.job);
+              const freshMatch = computeJobMatch(data.job, skills, targetRole);
+              setJob({
+                ...data.job,
+                matchScore: freshMatch.matchScore,
+                matchedSkills: freshMatch.matchedSkills,
+                missingSkills: freshMatch.missingSkills,
+              });
             } else {
               setNotFound(true);
             }
@@ -117,27 +170,96 @@ export default function JobDetailsPage() {
     return () => {
       mounted = false;
     };
-  }, [jobId]);
+  }, [jobId, reloadUserSkills]);
+
+  // Live update whenever user uploads/modifies their CV or switches active CV
+  React.useEffect(() => {
+    const handleCvChange = () => {
+      const { skills, targetRole, hasCv } = reloadUserSkills();
+      setHasUserCv(hasCv);
+      setJob((prevJob) => {
+        if (!prevJob || !prevJob.id) return prevJob;
+        const freshMatch = computeJobMatch(prevJob, skills, targetRole);
+        return {
+          ...prevJob,
+          matchScore: freshMatch.matchScore,
+          matchedSkills: freshMatch.matchedSkills,
+          missingSkills: freshMatch.missingSkills,
+        };
+      });
+    };
+
+    window.addEventListener('3watly_active_cv_changed', handleCvChange);
+    window.addEventListener('storage', handleCvChange);
+    return () => {
+      window.removeEventListener('3watly_active_cv_changed', handleCvChange);
+      window.removeEventListener('storage', handleCvChange);
+    };
+  }, [reloadUserSkills]);
 
   const handleApply = () => {
     const url = job.applyUrl || (job as any).apply_url;
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
-      setApplied(true);
     }
   };
 
-  const getDepartmentForRole = (title: string, isArLang: boolean) => {
+  const getDepartmentForRole = (title: string, isArLang: boolean, apiDept?: string) => {
+    if (apiDept && !/general|miscellaneous|technology/i.test(apiDept)) {
+      const d = apiDept.toLowerCase();
+      if (/sales|business development|commercial/i.test(d)) return isArLang ? "المبيعات وتطوير الأعمال" : "Sales & Business Development";
+      if (/marketing|growth/i.test(d)) return isArLang ? "التسويق الرقمي والنمو" : "Marketing & Growth";
+      if (/human resources|hr|recruitment/i.test(d)) return isArLang ? "الموارد البشرية والتوظيف" : "Human Resources";
+      if (/finance|accounting/i.test(d)) return isArLang ? "المالية والمحاسبة" : "Finance & Accounting";
+      if (/customer support|customer service/i.test(d)) return isArLang ? "خدمة العملاء والدعم" : "Customer Support";
+      if (/operations|logistics/i.test(d)) return isArLang ? "العمليات وسلاسل الإمداد" : "Operations & Logistics";
+      if (/data|analytics/i.test(d)) return isArLang ? "تحليل وهندسة البيانات" : "Data & Analytics";
+      return apiDept;
+    }
+
     const t = (title || '').toLowerCase();
-    if (/data|analytics|bi\b|scientist|power bi/i.test(t)) return isArLang ? "تحليل وهندسة البيانات" : "Data & Analytics";
-    if (/frontend|backend|full.?stack|react|node|developer|software/i.test(t)) return isArLang ? "تطوير وهندسة البرمجيات" : "Software Engineering";
-    if (/devops|cloud|sre|infrastructure/i.test(t)) return isArLang ? "الحوسبة السحابية و DevOps" : "Cloud & DevOps";
-    if (/product|scrum|agile/i.test(t)) return isArLang ? "إدارة المنتجات والتحول الرقمي" : "Product & Project Management";
-    if (/qa|quality|testing/i.test(t)) return isArLang ? "اختبار وضمان جودة البرمجيات" : "Quality Assurance";
-    if (/ui|ux|design/i.test(t)) return isArLang ? "تصميم الواجهات وتجربة المستخدم" : "UI/UX & Product Design";
-    if (/ai|machine learning|deep learning/i.test(t)) return isArLang ? "الذكاء الاصطناعي والتعلم الآلي" : "AI & Machine Learning";
+    if (/sales|account executive|business development|bd\b|account manager|commercial/i.test(t)) {
+      return isArLang ? "المبيعات وتطوير الأعمال" : "Sales & Business Development";
+    }
+    if (/marketing|growth|content|seo|social media|copywriter/i.test(t)) {
+      return isArLang ? "التسويق الرقمي والنمو" : "Marketing & Growth";
+    }
+    if (/hr\b|human resources|recruiter|recruitment|talent/i.test(t)) {
+      return isArLang ? "الموارد البشرية والتوظيف" : "Human Resources";
+    }
+    if (/finance|accounting|accountant|audit|banking|treasury/i.test(t)) {
+      return isArLang ? "المالية والمحاسبة" : "Finance & Accounting";
+    }
+    if (/operations|supply chain|logistics|procurement/i.test(t)) {
+      return isArLang ? "العمليات وسلاسل الإمداد" : "Operations & Logistics";
+    }
+    if (/customer support|customer service|call center|client success/i.test(t)) {
+      return isArLang ? "خدمة العملاء والدعم" : "Customer Support";
+    }
+    if (/data|analytics|bi\b|scientist|power bi/i.test(t)) {
+      return isArLang ? "تحليل وهندسة البيانات" : "Data & Analytics";
+    }
+    if (/frontend|backend|full.?stack|react|node|developer|software|engineer/i.test(t)) {
+      return isArLang ? "تطوير وهندسة البرمجيات" : "Software Engineering";
+    }
+    if (/devops|cloud|sre|infrastructure/i.test(t)) {
+      return isArLang ? "الحوسبة السحابية و DevOps" : "Cloud & DevOps";
+    }
+    if (/product|scrum|agile/i.test(t)) {
+      return isArLang ? "إدارة المنتجات والتحول الرقمي" : "Product & Project Management";
+    }
+    if (/qa|quality|testing/i.test(t)) {
+      return isArLang ? "اختبار وضمان جودة البرمجيات" : "Quality Assurance";
+    }
+    if (/ui|ux|design/i.test(t)) {
+      return isArLang ? "تصميم الواجهات وتجربة المستخدم" : "UI/UX & Product Design";
+    }
+    if (/ai|machine learning|deep learning/i.test(t)) {
+      return isArLang ? "الذكاء الاصطناعي والتعلم الآلي" : "AI & Machine Learning";
+    }
     return isArLang ? "قطاع التكنولوجيا والتحول الرقمي" : "Technology & Digital";
   };
+
 
   const getCompanyDetails = (comp: string, loc?: string) => {
     const norm = (comp || '').toLowerCase().trim();
@@ -235,17 +357,28 @@ export default function JobDetailsPage() {
               </span>
               <span>•</span>
               <span>{isAr ? job.postedAgoAr : job.postedAgo}</span>
+              {job.applicantsCount != null && (
+                <>
+                  <span>•</span>
+                  <span>{job.applicantsCount} {isAr ? "متقدمين" : "applicants"}</span>
+                </>
+              )}
               <span>•</span>
-              <span>{job.applicantsCount} {isAr ? "متقدمين" : "applicants"}</span>
-              <span>•</span>
-              {(job.salaryRangeAr === 'تحدد أثناء المقابلة' || job.salaryRange === 'Disclosed upon interview') ? (
+              {(
+                !job.salaryRange ||
+                job.salaryRange.includes('interview') ||
+                job.salaryRange.includes('Disclosed') ||
+                job.salaryRangeAr?.includes('تحدد أثناء المقابلة') ||
+                job.salaryRangeAr?.includes('يتحدد أثناء المقابلة') ||
+                job.salaryRange === 'تحدد أثناء المقابلة'
+              ) ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-[11.5px] font-semibold text-slate-500 dark:text-slate-400">
                   🤝 {isAr ? 'يتحدد أثناء المقابلة' : 'Disclosed upon interview'}
                 </span>
               ) : (
                 <>
                   <span className="font-bold text-emerald-700 dark:text-emerald-400">
-                    💰 {isAr ? job.salaryRangeAr : job.salaryRange}
+                    💰 {isAr ? job.salaryRangeAr.replace(/(دوام كامل|دوام جزئي).*/i, '').trim() : job.salaryRange.replace(/(Full Time|Part Time).*/i, '').trim()}
                   </span>
                   <span className="px-1.5 py-0.2 rounded bg-emerald-50 dark:bg-emerald-950/30 text-[10.5px] text-emerald-600 dark:text-emerald-400 font-semibold">
                     {isAr ? 'معلن' : 'Disclosed'}
@@ -266,7 +399,7 @@ export default function JobDetailsPage() {
                 {isAr ? job.seniorityAr : job.seniority} Level
               </span>
               <span className="px-2.5 py-0.5 rounded-lg bg-[#FFF7ED] dark:bg-amber-950/50 text-[11px] font-bold text-[#F97316]">
-                {isAr ? job.departmentAr : job.department}
+                {getDepartmentForRole(job.title, isAr, job.department)}
               </span>
             </div>
           </div>
@@ -278,20 +411,25 @@ export default function JobDetailsPage() {
             href={job.applyUrl || (job as any).apply_url || '#'}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => setApplied(true)}
+            onClick={() => {
+            }}
             className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-[13.5px] shadow-md shadow-blue-600/30 hover:shadow-blue-600/45 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-150 cursor-pointer flex items-center justify-center gap-2"
           >
             <ExternalLink className="w-4 h-4 opacity-90" />
-            <span>{applied ? (isAr ? "تم التقديم بنجاح ✓" : "Applied ✓") : (isAr ? "التقديم الفوري الآن ↗" : "Apply Now ↗")}</span>
+            <span>{isAr ? "التقديم عبر موقع الوظيفة ↗" : "Apply on Official Portal ↗"}</span>
           </a>
 
           <button
             type="button"
-            onClick={() => setIsSaved(!isSaved)}
-            className="w-full sm:w-auto px-5 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#070B14] text-[12.5px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            onClick={toggleSave}
+            className={`w-full sm:w-auto px-5 py-2 rounded-xl border text-[12.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              isSaved
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'
+                : 'border-slate-200 dark:border-white/10 bg-white dark:bg-[#070B14] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+            }`}
           >
-            <Bookmark className={`w-3.5 h-3.5 ${isSaved ? 'fill-current text-blue-600' : ''}`} />
-            <span>{isSaved ? (isAr ? "محفوظة ✓" : "Saved ✓") : (isAr ? "حفظ الوظيفة" : "Save Job")}</span>
+            <Bookmark className={`w-3.5 h-3.5 ${isSaved ? 'fill-current text-blue-600 dark:text-blue-400' : ''}`} />
+            <span>{isSaved ? (isAr ? "محفوظة في قائمتك ✓" : "Saved to Bookmarks ✓") : (isAr ? "حفظ الوظيفة" : "Save Job")}</span>
           </button>
         </div>
       </div>
@@ -350,32 +488,54 @@ export default function JobDetailsPage() {
           <div className="relative h-[115px] w-[115px]">
             <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
               <circle cx="50" cy="50" r="41" fill="none" stroke="#E8F8F0" className="dark:stroke-emerald-950/40" strokeWidth="7" />
-              <circle
-                cx="50"
-                cy="50"
-                r="41"
-                fill="none"
-                stroke="#10B981"
-                strokeWidth="7"
-                strokeLinecap="round"
-                strokeDasharray={2 * Math.PI * 41}
-                strokeDashoffset={2 * Math.PI * 41 * (1 - job.matchScore / 100)}
-              />
+              {job.matchScore != null && (
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="41"
+                  fill="none"
+                  stroke="#10B981"
+                  strokeWidth="7"
+                  strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 41}
+                  strokeDashoffset={2 * Math.PI * 41 * (1 - job.matchScore / 100)}
+                />
+              )}
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-[25px] font-black text-[#0B132B] dark:text-white leading-none">
-                {job.matchScore}%
+                {job.matchScore != null ? `${job.matchScore}%` : '--%'}
               </span>
               <span className="text-[11px] font-medium text-slate-400 dark:text-slate-400 mt-0.5">
-                {isAr ? "توافق إجمالي" : "Overall Match"}
+                {job.matchScore != null ? (isAr ? "توافق إجمالي" : "Overall Match") : (isAr ? "يتطلب CV" : "Needs CV")}
               </span>
             </div>
           </div>
 
-          <p className="mt-2 text-center text-[12px] text-slate-600 dark:text-slate-300 font-medium max-w-[210px]">
-            {isAr ? "توافق ممتاز! خبراتك تغطي أغلب متطلبات الوظيفة." : "Great Match! You meet most of the key requirements."}
-          </p>
+          {job.matchScore != null ? (
+            <p className="mt-2 text-center text-[12px] text-slate-600 dark:text-slate-300 font-medium max-w-[210px]">
+              {job.matchScore >= 75
+                ? (isAr ? "توافق ممتاز! خبراتك تغطي أغلب متطلبات الوظيفة." : "Great Match! You meet most of the key requirements.")
+                : job.matchScore >= 50
+                  ? (isAr ? "توافق جيد. يمكن رفعه بإضافة بعض المهارات الناقصة." : "Good match. Add missing skills to boost your score.")
+                  : (isAr ? "توافق منخفض. راجع المهارات الناقصة لتحسين ملفك." : "Low match. Review missing skills to improve your profile.")}
+            </p>
+          ) : (
+            <>
+              <p className="mt-2 text-center text-[12px] text-slate-600 dark:text-slate-300 font-medium max-w-[210px]">
+                {isAr ? "ارفع سيرتك الذاتية لاحتساب نسبة التوافق مع الوظيفة بدقة." : "Upload your CV to calculate accurate match score."}
+              </p>
+              <Link
+                href="/cv-builder"
+                className="mt-2.5 inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-bold transition-all"
+              >
+                <Zap className="w-3.5 h-3.5 fill-white" />
+                {isAr ? "ارفع الـ CV الآن" : "Upload CV Now"}
+              </Link>
+            </>
+          )}
         </div>
+
 
         {/* Skills Match Breakdown Subsection */}
         <div className="pt-3 border-t border-slate-100 dark:border-white/10 space-y-3">
@@ -383,14 +543,42 @@ export default function JobDetailsPage() {
             {isAr ? "تفصيل مطابقة المهارات" : "Skills Match Breakdown"}
           </h4>
 
-          {/* Matched Skills */}
           {(() => {
             const NON_SKILLS = new Set([
-              'internship', 'student', 'it/software development', 'research', 'ai', 'bi', 'experienced',
-              'business analysis', 'data analysis', 'data analytics', 'market research', 'computer skills', 'operations'
+              'internship', 'student', 'it/software development', 'experienced', 'entry level',
+              'full time', 'part time', 'contract', 'freelance'
             ]);
             const cleanMatched = (job.matchedSkills || []).filter(s => !NON_SKILLS.has(s.name.toLowerCase()));
             const cleanMissing = (job.missingSkills || []).filter(s => !NON_SKILLS.has(s.name.toLowerCase()));
+
+            if (!hasUserCv || job.matchScore == null) {
+              return (
+                <div className="space-y-3 pt-1">
+                  <p className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                    {isAr
+                      ? "أبرز المهارات المطلوبة للوظيفة. ارفع سيرتك الذاتية لاحتساب نسبة التوافق واكتشاف المهارات التي تتقنها وتلك التي تحتاج لتطويرها:"
+                      : "Key skills required for this role. Upload your CV to calculate your match breakdown:"}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {cleanMissing.map((s) => (
+                      <span
+                        key={s.name}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11.5px] font-semibold border border-slate-200/60 dark:border-slate-700"
+                      >
+                        {s.name}
+                      </span>
+                    ))}
+                  </div>
+                  <Link
+                    href="/cv-builder"
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 text-blue-600 dark:text-blue-400 text-[12px] font-bold border border-blue-200 dark:border-blue-800/60 transition-colors"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>{isAr ? "ارفع سيرتك الذاتية لاحتساب المطابقة" : "Upload CV to See Match"}</span>
+                  </Link>
+                </div>
+              );
+            }
 
             return (
               <>
@@ -400,7 +588,7 @@ export default function JobDetailsPage() {
                       <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#E8F8F0] dark:bg-emerald-950/70 text-[#12B76A] text-[9px] font-black">
                         ✓
                       </span>
-                      <span>{isAr ? "المهارات المتطابقة" : "Matched Skills"}</span>
+                      <span>{isAr ? "المهارات المتطابقة" : "Matched Skills"} ({cleanMatched.length})</span>
                     </div>
 
                     <div className="space-y-2">
@@ -429,7 +617,7 @@ export default function JobDetailsPage() {
                       <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#FFF7ED] dark:bg-amber-950/70 text-[#EA580C] text-[9px] font-black">
                         ●
                       </span>
-                      <span>{isAr ? "المهارات الناقصة وفرص التحسين" : "Missing Skills to Add"}</span>
+                      <span>{isAr ? "المهارات الناقصة وفرص التحسين" : "Missing Skills to Add"} ({cleanMissing.length})</span>
                     </div>
 
                     <div className="space-y-2.5">
@@ -457,14 +645,21 @@ export default function JobDetailsPage() {
                     </div>
                   </div>
                 )}
+
+                {cleanMatched.length === 0 && cleanMissing.length === 0 && (
+                  <p className="text-[12px] text-slate-500 text-center py-2">
+                    {isAr ? "لا توجد متطلبات مهارية مسجلة لهذه الوظيفة." : "No specific skill requirements listed for this role."}
+                  </p>
+                )}
               </>
             );
           })()}
         </div>
 
+
       </div>
 
-      {/* Widget 2: CV Compatibility & Optimizer (Matching media_1787760926645.png 1:1) */}
+      {/* Widget 2: CV Compatibility & Optimizer */}
       <div className="rounded-[22px] border border-slate-200/90 dark:border-white/10 bg-white dark:bg-[#0B1120] p-5 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-[13.5px] font-bold text-[#0B132B] dark:text-white">
@@ -478,62 +673,74 @@ export default function JobDetailsPage() {
           />
         </div>
 
-        {/* Arc Gauge */}
-        <div className="flex flex-col items-center py-1">
-          {(() => {
-            const cvScore = job.matchScore || 85;
-            const arcRadius = 38;
-            const arcLength = Math.PI * arcRadius; // ~119.38
-            const strokeOffset = arcLength * (1 - cvScore / 100);
+        {/* Arc Gauge — only when user has a CV */}
+        {hasUserCv && job.matchScore != null ? (
+          <div className="flex flex-col items-center py-1">
+            {(() => {
+              const cvScore = job.matchScore;
+              const arcRadius = 38;
+              const arcLength = Math.PI * arcRadius;
+              const strokeOffset = arcLength * (1 - cvScore / 100);
 
-            return (
-              <div className="relative h-20 w-36 overflow-hidden flex items-end justify-center">
-                <svg viewBox="0 0 100 55" className="h-full w-full">
-                  {/* Background Arc (180 deg semicircle from (12, 48) to (88, 48)) */}
-                  <path
-                    d="M 12 48 A 38 38 0 0 1 88 48"
-                    fill="none"
-                    stroke="#EEF3FE"
-                    className="dark:stroke-slate-800"
-                    strokeWidth="8"
-                    strokeLinecap="round"
-                  />
-                  {/* Foreground Animated Match Arc (EXACT same geometric path) */}
-                  <path
-                    d="M 12 48 A 38 38 0 0 1 88 48"
-                    fill="none"
-                    stroke="#1B57E0"
-                    className="dark:stroke-blue-500"
-                    strokeWidth="8"
-                    strokeLinecap="round"
-                    strokeDasharray={arcLength}
-                    strokeDashoffset={strokeOffset}
-                  />
-                </svg>
-                <div className="absolute bottom-1 inset-x-0 flex items-center justify-center">
-                  <span className="text-[22px] font-black text-[#0B132B] dark:text-white leading-none">
-                    {cvScore}<span className="text-[13px] text-slate-400 font-bold">/100</span>
-                  </span>
+              return (
+                <div className="relative h-20 w-36 overflow-hidden flex items-end justify-center">
+                  <svg viewBox="0 0 100 55" className="h-full w-full">
+                    <path
+                      d="M 12 48 A 38 38 0 0 1 88 48"
+                      fill="none"
+                      stroke="#EEF3FE"
+                      className="dark:stroke-slate-800"
+                      strokeWidth="8"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M 12 48 A 38 38 0 0 1 88 48"
+                      fill="none"
+                      stroke="#1B57E0"
+                      className="dark:stroke-blue-500"
+                      strokeWidth="8"
+                      strokeLinecap="round"
+                      strokeDasharray={arcLength}
+                      strokeDashoffset={strokeOffset}
+                    />
+                  </svg>
+                  <div className="absolute bottom-1 inset-x-0 flex items-center justify-center">
+                    <span className="text-[22px] font-black text-[#0B132B] dark:text-white leading-none">
+                      {cvScore}<span className="text-[13px] text-slate-400 font-bold">/100</span>
+                    </span>
+                  </div>
                 </div>
-              </div>
-            );
-          })()}
+              );
+            })()}
 
-          <p className="mt-2 text-center text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-[220px]">
-            {isAr 
-              ? "سيرتك الذاتية متوافقة بشكل جيد، ويمكن تحسين صياغة بعض الكلمات لمضاعفة فرص القبول."
-              : "Your CV is good, but can be improved for higher chances."}
-          </p>
-        </div>
+            <p className="mt-2 text-center text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-[220px]">
+              {job.matchScore >= 75
+                ? (isAr ? "سيرتك الذاتية متوافقة بشكل ممتاز مع هذه الوظيفة." : "Your CV is an excellent match for this role.")
+                : (isAr ? "سيرتك الذاتية متوافقة بشكل جيد، ويمكن تحسين بعض الكلمات المفتاحية لمضاعفة فرص القبول." : "Your CV is good, but can be optimized for higher chances.")}
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center py-3 gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800/60">
+              <Zap className="w-5 h-5 text-blue-500" />
+            </div>
+            <p className="text-center text-[12px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-[200px]">
+              {isAr
+                ? "ارفع سيرتك الذاتية لفحص مدى توافق الـ CV مع الوظيفة وتحسينه بالذكاء الاصطناعي."
+                : "Upload your CV to check compatibility with this job and optimize it with AI."}
+            </p>
+          </div>
+        )}
 
         <Link
           href="/cv-builder"
           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#1B57E0] hover:bg-blue-700 text-white text-[13px] font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer"
         >
           <Zap className="w-3.5 h-3.5 fill-white" />
-          <span>{isAr ? "تحسين الـ CV لهذه الوظيفة" : "Optimize CV for this Role"}</span>
+          <span>{hasUserCv ? (isAr ? "تحسين الـ CV لهذه الوظيفة" : "Optimize CV for this Role") : (isAr ? "ارفع الـ CV الآن" : "Upload CV Now")}</span>
         </Link>
       </div>
+
 
     </div>
   );
@@ -692,7 +899,7 @@ export default function JobDetailsPage() {
                       </div>
                       <div>
                         <span className="block text-[10.5px] text-slate-400">{isAr ? "القسم أو الإدارة" : "Department"}</span>
-                        <p className="text-[12.5px] font-bold text-[#0B132B] dark:text-white">{getDepartmentForRole(job.title, isAr)}</p>
+                        <p className="text-[12.5px] font-bold text-[#0B132B] dark:text-white">{getDepartmentForRole(job.title, isAr, job.department)}</p>
                       </div>
                     </div>
 

@@ -8,14 +8,15 @@ export function ThemeToggle() {
 
   useEffect(() => {
     setMounted(true);
-    const savedTheme = localStorage.getItem('majra-theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const savedTheme = typeof window !== 'undefined' ? localStorage.getItem('majra-theme') : null;
+    const isCurrentlyDark = savedTheme 
+      ? savedTheme === 'dark' 
+      : document.documentElement.classList.contains('dark');
     
-    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
-      setIsDark(true);
+    setIsDark(isCurrentlyDark);
+    if (isCurrentlyDark) {
       document.documentElement.classList.add('dark');
     } else {
-      setIsDark(false);
       document.documentElement.classList.remove('dark');
     }
   }, []);

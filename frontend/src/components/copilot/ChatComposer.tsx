@@ -34,7 +34,7 @@ const englishMoreSuggestions = [
 ];
 
 type ChatComposerProps = {
-  onSend: (text: string, attachment?: string) => void;
+  onSend: (text: string, attachment?: string, attachmentData?: any) => void;
   isThinking: boolean;
 };
 
@@ -42,6 +42,8 @@ export function ChatComposer({ onSend, isThinking }: ChatComposerProps) {
   const { isAr } = useLanguage();
   const [value, setValue] = useState('');
   const [attachment, setAttachment] = useState<string | null>(null);
+  const [parsedData, setParsedData] = useState<any | null>(null);
+  const [isParsing, setIsParsing] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -49,30 +51,52 @@ export function ChatComposer({ onSend, isThinking }: ChatComposerProps) {
   const moreSuggestions = isAr ? arabicMoreSuggestions : englishMoreSuggestions;
 
   const submit = (text: string) => {
-    if (isThinking) return;
+    if (isThinking || isParsing) return;
     const trimmed = text.trim();
     if (!trimmed && !attachment) return;
-    onSend(trimmed || (isAr ? `راجع سيرتي الذاتية: ${attachment}` : `Review my CV: ${attachment}`), attachment ?? undefined);
+    const defaultPrompt = isAr 
+      ? `يرجى مراجعة وتحليل سيرتي الذاتية المرفقة (${attachment}) بالتفصيل وتقديم تقييم للـ ATS ونقاط القوة والضعف والمهارات المطلوبة.`
+      : `Please thoroughly review and analyze my attached resume (${attachment}), evaluating ATS readiness, key strengths, gaps, and market fit.`;
+    
+    onSend(trimmed || defaultPrompt, attachment ?? undefined, parsedData ?? undefined);
     setValue('');
     setAttachment(null);
+    setParsedData(null);
     setShowMore(false);
   };
 
-  const canSend = (value.trim().length > 0 || !!attachment) && !isThinking;
+  const canSend = (value.trim().length > 0 || !!attachment) && !isThinking && !isParsing;
 
   return (
     <div className="rounded-[16px] border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0F172A] p-4 shadow-sm">
       {attachment && (
-        <div className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/60 px-3.5 py-2">
-          <PaperclipIcon className="h-[14px] w-[14px] text-blue-600 dark:text-blue-400" strokeWidth={2} />
-          <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-slate-800 dark:text-slate-200">
-            {attachment}
-          </span>
+        <div className="mb-3 flex items-center gap-2 rounded-xl border border-blue-200/70 dark:border-blue-500/20 bg-blue-50/70 dark:bg-blue-950/40 px-3.5 py-2">
+          {isParsing ? (
+            <Loader2Icon className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400 shrink-0" />
+          ) : (
+            <PaperclipIcon className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" strokeWidth={2} />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[12.5px] font-bold text-slate-900 dark:text-slate-100">
+              {attachment}
+            </p>
+            <p className="text-[11px] text-blue-700 dark:text-blue-300 font-medium">
+              {isParsing 
+                ? (isAr ? 'جاري قراءة واستخراج بيانات السيرة الذاتية...' : 'Parsing and analyzing resume data...') 
+                : (parsedData?.skills?.length
+                    ? (isAr ? `✓ تم التحليل بنجاح (${parsedData.skills.length} مهارة، ${parsedData.projects?.length || 0} مشاريع)` : `✓ Parsed (${parsedData.skills.length} skills, ${parsedData.projects?.length || 0} projects)`)
+                    : (isAr ? 'جاهز للمراجعة والتحليل' : 'Ready for review'))}
+            </p>
+          </div>
           <button
             type="button"
-            onClick={() => setAttachment(null)}
+            onClick={() => {
+              setAttachment(null);
+              setParsedData(null);
+              setIsParsing(false);
+            }}
             aria-label="Remove attachment"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-slate-400 hover:bg-white dark:hover:bg-slate-700 hover:text-slate-900 transition-colors"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-slate-400 hover:bg-white dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
           >
             <XIcon className="h-3.5 w-3.5" strokeWidth={2.4} />
           </button>
@@ -91,7 +115,7 @@ export function ChatComposer({ onSend, isThinking }: ChatComposerProps) {
           <input
             type="text"
             value={value}
-            disabled={isThinking}
+            disabled={isThinking || isParsing}
             onChange={(event) => setValue(event.target.value)}
             placeholder={
               isAr
@@ -107,15 +131,53 @@ export function ChatComposer({ onSend, isThinking }: ChatComposerProps) {
           type="file"
           accept=".pdf,.doc,.docx,.txt"
           className="hidden"
-          onChange={(event) => {
+          onChange={async (event) => {
             const file = event.target.files?.[0];
-            if (file) {
-              setAttachment(file.name);
-              toast.success(isAr ? 'تم إرفاق الملف بنجاح' : 'File attached', {
-                description: file.name,
-              });
+            if (!file) return;
+
+            if (file.size > 8 * 1024 * 1024) {
+              toast.error(isAr ? 'حجم الملف كبير جداً (الحد الأقصى 8 ميجابايت)' : 'File too large (Max 8MB)');
+              event.target.value = '';
+              return;
             }
-            event.target.value = '';
+
+            setAttachment(file.name);
+            setIsParsing(true);
+
+            try {
+              const formData = new FormData();
+              formData.append('file', file);
+              const res = await fetch('/api/cv/parse', {
+                method: 'POST',
+                body: formData,
+              });
+
+              if (res.ok) {
+                const json = await res.json();
+                if (json.success && json.data) {
+                  setParsedData(json.data);
+                  try {
+                    localStorage.setItem('3watly_parsed_cv', JSON.stringify(json.data));
+                    window.dispatchEvent(new CustomEvent('3watly_active_cv_changed', { detail: json.data }));
+                  } catch {}
+                  toast.success(isAr ? 'تم استخراج بيانات السيرة الذاتية بنجاح ✓' : 'Resume parsed successfully ✓', {
+                    description: isAr
+                      ? `استخرجنا ${json.data.skills?.length || 0} مهارة و ${json.data.projects?.length || 0} مشاريع جاهزة للفحص.`
+                      : `Found ${json.data.skills?.length || 0} skills and ${json.data.projects?.length || 0} projects.`,
+                  });
+                } else {
+                  toast.info(isAr ? 'تم إرفاق الملف' : 'File attached');
+                }
+              } else {
+                toast.info(isAr ? 'تم إرفاق الملف' : 'File attached');
+              }
+            } catch (err) {
+              console.warn('Error parsing attached CV:', err);
+              toast.info(isAr ? 'تم إرفاق الملف' : 'File attached');
+            } finally {
+              setIsParsing(false);
+              event.target.value = '';
+            }
           }}
         />
 
@@ -123,7 +185,7 @@ export function ChatComposer({ onSend, isThinking }: ChatComposerProps) {
           type="button"
           onClick={() => fileRef.current?.click()}
           aria-label="Attach a file"
-          disabled={isThinking}
+          disabled={isThinking || isParsing}
           title={isAr ? "إرفاق سيرة ذاتية أو ملف" : "Attach CV or document"}
           className="flex h-[40px] w-[40px] items-center justify-center rounded-xl border border-slate-200 dark:border-white/10 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer disabled:opacity-40"
         >

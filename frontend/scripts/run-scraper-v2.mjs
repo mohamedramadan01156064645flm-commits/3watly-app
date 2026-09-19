@@ -1,755 +1,696 @@
 /**
- * 3watly — Wuzzuf Scraper v2 (Standalone Node.js Runner)
- * Mirrors the logic in src/lib/scraper/wuzzuf.ts exactly.
+ * 3watly — Wuzzuf Scraper v3 (JSON API Edition)
+ * Uses Wuzzuf internal REST API (/api/job) — no HTML scraping, no 403 issues on GitHub Actions.
  * Run: node scripts/run-scraper-v2.mjs
  */
 
-import * as cheerio from 'cheerio';
-import crypto from 'crypto';
-import { createClient } from '@supabase/supabase-js';
+class DummyWebSocket {
+  constructor() {}
+  addEventListener() {}
+  removeEventListener() {}
+  close() {}
+  send() {}
+}
+if (typeof globalThis.WebSocket === "undefined") globalThis.WebSocket = DummyWebSocket;
+if (typeof global !== "undefined" && typeof global.WebSocket === "undefined") global.WebSocket = DummyWebSocket;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Config
-// ─────────────────────────────────────────────────────────────────────────────
-import fs from 'fs';
-import path from 'path';
+import * as cheerio from "cheerio";
+import crypto from "crypto";
+import { createClient } from "@supabase/supabase-js";
+import fs from "fs";
+import path from "path";
 
 function getEnvVal(key) {
   if (process.env[key]) return process.env[key];
   try {
-    const envPath = path.resolve(process.cwd(), '.env.local');
+    const envPath = path.resolve(process.cwd(), ".env.local");
     if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, 'utf-8');
-      const m = content.match(new RegExp(`^${key}=(.*)$`, 'm'));
-      if (m) return m[1].trim().replace(/^['"]|['"]$/g, '');
+      const content = fs.readFileSync(envPath, "utf-8");
+      const m = content.match(new RegExp(`^${key}=(.*)$`, "m"));
+      if (m) return m[1].trim().replace(/^['""]|['""]$/g, "");
     }
   } catch {}
-  return '';
+  return "";
 }
 
-const SUPABASE_URL = getEnvVal('NEXT_PUBLIC_SUPABASE_URL');
-const SERVICE_ROLE_KEY = getEnvVal('SUPABASE_SERVICE_ROLE_KEY') || getEnvVal('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+const SUPABASE_URL = getEnvVal("NEXT_PUBLIC_SUPABASE_URL");
+const SERVICE_ROLE_KEY = getEnvVal("SUPABASE_SERVICE_ROLE_KEY") || getEnvVal("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false }
+  auth: { autoRefreshToken: false, persistSession: false },
+  realtime: { transport: DummyWebSocket },
 });
 
-const WUZZUF_BASE = 'https://wuzzuf.net';
-const BROWSER_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-  'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
-  'Referer': 'https://www.google.com/',
-  'Sec-Fetch-Dest': 'document',
-  'Sec-Fetch-Mode': 'navigate',
+const WUZZUF_API = "https://wuzzuf.net/api/job";
+const WUZZUF_BASE = "https://wuzzuf.net";
+const API_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+  "Accept": "application/vnd.api+json, application/json, text/xml, */*",
+  "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
+  "Referer": "https://wuzzuf.net/",
 };
 
-const SEARCH_QUERIES = [
-  'data analyst', 'data engineer', 'data scientist',
-  'business intelligence', 'machine learning engineer',
-  'python developer', 'sql developer',
-  'frontend developer', 'react developer',
-  'backend developer', 'full stack developer',
-  'devops engineer', 'product manager',
-  'business analyst', 'power bi developer',
-  'flutter developer', 'mobile developer', 'qa engineer',
+const TECH_SLUG_PATTERNS = [
+  "data-analyst", "data-engineer", "data-scientist", "business-intelligence",
+  "machine-learning", "artificial-intelligence", "ai-engineer",
+  "software-engineer", "software-developer", "frontend", "front-end",
+  "backend", "back-end", "full-stack", "fullstack", "react", "angular",
+  "vue", "node", "python", "java-developer", "dotnet", "net-developer",
+  "c-sharp", "c-plus-plus", "php-developer", "laravel", "flutter",
+  "mobile-developer", "android", "ios-developer", "devops", "cloud-engineer",
+  "aws", "azure", "system-administrator", "network-engineer", "cyber-security",
+  "information-security", "qa-engineer", "quality-assurance", "testing-engineer",
+  "test-automation", "scrum-master", "product-manager", "product-owner",
+  "technical-lead", "solution-architect", "database-administrator", "dba",
+  "power-bi", "tableau", "etl-developer", "odoo"
 ];
+const PAGE_SIZE = 20;
+const DELAY_MS = 700;
 
-const DETAIL_FETCH_LIMIT = 50;
-const DETAIL_FETCH_CONCURRENCY = 3;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Skill Intelligence
-// ─────────────────────────────────────────────────────────────────────────────
 const SKILL_ALIASES = {
-  'reactjs': 'React', 'react.js': 'React',
-  'nodejs': 'Node.js', 'node js': 'Node.js', 'node': 'Node.js',
-  'postgres': 'PostgreSQL', 'pg': 'PostgreSQL',
-  'js': 'JavaScript', 'ts': 'TypeScript',
-  'powerbi': 'Power BI', 'power_bi': 'Power BI', 'msbi': 'Power BI',
-  'ms sql': 'SQL Server', 'mssql': 'SQL Server',
-  'vue': 'Vue.js', 'vuejs': 'Vue.js',
-  'nextjs': 'Next.js', 'next.js': 'Next.js',
-  'k8s': 'Kubernetes',
-  'scikit': 'Scikit-Learn', 'sklearn': 'Scikit-Learn',
-  'tensorflow': 'TensorFlow', 'pytorch': 'PyTorch',
-  'restapi': 'REST APIs', 'rest api': 'REST APIs', 'rest': 'REST APIs',
-  'ci/cd': 'CI/CD', 'cicd': 'CI/CD',
-  'graphql': 'GraphQL', 'nlp': 'NLP', 'etl': 'ETL',
+  "reactjs":"React","react.js":"React","nodejs":"Node.js","node js":"Node.js",
+  "postgres":"PostgreSQL","js":"JavaScript","ts":"TypeScript",
+  "powerbi":"Power BI","power bi":"Power BI","msbi":"Power BI",
+  "ms sql":"SQL Server","mssql":"SQL Server","vue":"Vue.js","vuejs":"Vue.js",
+  "nextjs":"Next.js","next.js":"Next.js","k8s":"Kubernetes",
+  "scikit":"Scikit-Learn","sklearn":"Scikit-Learn",
+  "restapi":"REST APIs","rest api":"REST APIs","ci/cd":"CI/CD","cicd":"CI/CD",
+  "nlp":"NLP","etl":"ETL","android":"Android","ui/ux":"UI/UX",
+  "pandas":"Pandas","numpy":"NumPy","excel":"Excel","ms excel":"Excel","microsoft excel":"Excel",
 };
 
-const SKILL_BLACKLIST = new Set([
-  'experienced','experience','senior','junior','mid level','expert','manager','specialist',
-  'internship','intern','student','entry level','fresh graduate','fresher','graduate',
-  'it','information technology','information technology (it)','software development','engineering',
-  'engineering - mechanical/electrical','manufacturing/production','operations/management',
-  'creative/design/art','engineering - other','business administration','quality control',
-  'general','other','miscellaneous','research','ability','skills','knowledge','understanding',
-  'strong','good','excellent','proficient','familiar','basic','advanced',
-  'full time','part time','contract','freelance','remote','on-site','hybrid',
-  'communication','teamwork','leadership','problem solving','critical thinking',
-  'analytical skills','work under pressure','attention to detail','time management',
-  'data analysis','business analysis','data analytics','market research',
-  'shift based','males only','females only','unspecified','education','training',
-  'technology','tech','computer science','software','it/software',
+const KNOWN_TECH_SKILLS = new Set([
+  "Python","SQL","Power BI","Tableau","Excel","Pandas","NumPy","R",
+  "PostgreSQL","MySQL","MongoDB","Redis","Oracle","SQL Server","Snowflake",
+  "BigQuery","dbt","Airflow","Kafka","Docker","Kubernetes","AWS","Azure",
+  "GCP","Google Cloud","Git","GitHub","CI/CD","Linux","React","Next.js",
+  "TypeScript","JavaScript","Node.js","Express","FastAPI","Django","Flask",
+  "Java","Spring Boot","C#",".NET","C++","Go","PHP","Laravel","Angular",
+  "Vue.js","Tailwind CSS","GraphQL","REST APIs","Agile","Scrum","Jira",
+  "Data Modeling","ETL","Machine Learning","Deep Learning","NLP","TensorFlow",
+  "PyTorch","Scikit-Learn","Statistics","Selenium","Postman","Flutter","Dart",
+  "Firebase","DAX","Spark","Ansible","Terraform","Prometheus","Grafana",
+  "Elasticsearch","LLMs","Generative AI","React Native","Kotlin","Swift","iOS","Android",
+  "ASP.NET","Spring","Hibernate","Microservices","gRPC","Celery",
+  "OpenCV","TensorFlow Lite","BERT","Transformers",".NET Core",
+  // Networking & Sysadmin
+  "Networking","TCP/IP","DNS","DHCP","VPN","Firewalls","SIEM","Cisco","Routing","Switching",
+  "Active Directory","Windows Server","Windows","macOS","VMware","Hyper-V","Virtualization",
+  "Network Security","Penetration Testing","Wireshark","Nagios","SNMP","SSL/TLS",
+  // IT Support & Help Desk
+  "Help Desk","ITIL","ServiceNow","Troubleshooting","Hardware","Technical Support",
+  "Remote Desktop","Ticketing Systems","SLA Management","IT Support",
+  // BI & Reporting Tools
+  "Power Query","M Language","SSRS","SSIS","SSAS","Crystal Reports","Looker","Metabase",
+  "QlikView","Qlik Sense","MicroStrategy","SAP BI","OBIEE",
+  // ERP & Enterprise
+  "SAP","Odoo","ERP","Dynamics 365","Oracle ERP","NetSuite","SAP ABAP","SAP HANA",
+  "Salesforce","HubSpot","Zoho CRM","Confluence","SharePoint","Power Automate",
+  // DevOps & Cloud
+  "Azure DevOps","GitHub Actions","Jenkins","GitLab CI","Bitbucket","SonarQube",
+  "Nginx","Apache","RabbitMQ","Celery","Redis","Bash","Shell Scripting","PowerShell",
+  // Data & AI extras
+  "Matplotlib","Seaborn","Plotly","SciPy","OpenAI","LangChain","Hugging Face",
+  "YOLO","Stable Diffusion","Vector Databases","Pinecone","Weaviate","ChromaDB",
+  "Hadoop","Hive","HBase","Cassandra","DynamoDB","Neo4j","InfluxDB","Databricks",
+  // Mobile & UI
+  "Figma","Adobe XD","Sketch","InVision","Xcode","Android Studio","Ionic","Xamarin",
+  // Testing
+  "Manual Testing","Test Automation","Cypress","Playwright","JUnit","Jest","Pytest",
+  "Appium","JMeter","LoadRunner","Test Cases","Bug Tracking",
+  // Other common tech skills
+  "UX Research","Wireframing","Prototyping","UI/UX","Figma",
+  "Blockchain","Solidity","Web3","Smart Contracts",
 ]);
 
+
 const ROLE_SKILL_PROFILES = {
-  'data analyst':         { core: ['SQL','Excel','Power BI'], common: ['Python','Tableau','Statistics'] },
-  'data analytics':       { core: ['SQL','Excel','Power BI'], common: ['Python','Tableau'] },
-  'data engineer':        { core: ['Python','SQL','ETL'], common: ['Airflow','Docker','Spark','dbt'] },
-  'data scientist':       { core: ['Python','Machine Learning','Statistics'], common: ['TensorFlow','PyTorch','Pandas'] },
-  'machine learning':     { core: ['Python','Machine Learning','Statistics'], common: ['TensorFlow','PyTorch','Scikit-Learn'] },
-  'business intelligence':{ core: ['Power BI','SQL','Excel'], common: ['DAX','Tableau','Data Modeling'] },
-  'bi developer':         { core: ['Power BI','SQL','Excel'], common: ['DAX','Tableau'] },
-  'power bi':             { core: ['Power BI','SQL','DAX'], common: ['Excel','Data Modeling'] },
-  'frontend':             { core: ['JavaScript','HTML','CSS','React'], common: ['TypeScript','Next.js','Git'] },
-  'react':                { core: ['React','JavaScript','HTML'], common: ['TypeScript','Next.js','Git'] },
-  'backend':              { core: ['REST APIs','SQL','Git'], common: ['Node.js','Python','Docker'] },
-  'full stack':           { core: ['JavaScript','SQL','Git','REST APIs'], common: ['React','Node.js','Docker'] },
-  'fullstack':            { core: ['JavaScript','SQL','Git'], common: ['React','Node.js','Docker'] },
-  'devops':               { core: ['Docker','CI/CD','Linux','Git'], common: ['Kubernetes','AWS','Ansible'] },
-  'mobile':               { core: ['REST APIs','Git'], common: ['Flutter','React Native','Firebase'] },
-  'flutter':              { core: ['Flutter','Dart','REST APIs'], common: ['Firebase','Git'] },
-  'product manager':      { core: ['Agile','Jira','Analytics'], common: ['Scrum','SQL','Confluence'] },
-  'product owner':        { core: ['Agile','Jira'], common: ['Scrum','Analytics'] },
-  'business analyst':     { core: ['SQL','Excel','Requirements Analysis'], common: ['Power BI','Jira'] },
-  'qa':                   { core: ['Manual Testing','Jira','Test Cases'], common: ['Selenium','Postman'] },
-  'quality assurance':    { core: ['Manual Testing','Jira'], common: ['Selenium','Automation Testing'] },
+  "data analyst":        {core:["SQL","Excel","Power BI"],common:["Python","Tableau","Statistics"]},
+  "data engineer":       {core:["Python","SQL","ETL"],common:["Airflow","Docker","Spark","dbt"]},
+  "data scientist":      {core:["Python","Machine Learning","Statistics"],common:["TensorFlow","PyTorch","Pandas"]},
+  "machine learning":    {core:["Python","Machine Learning","Statistics"],common:["TensorFlow","PyTorch","Scikit-Learn"]},
+  "business intelligence":{core:["Power BI","SQL","Excel"],common:["DAX","Tableau","Data Modeling"]},
+  "power bi":            {core:["Power BI","SQL","DAX"],common:["Excel","Data Modeling"]},
+  "frontend":            {core:["JavaScript","HTML","CSS","React"],common:["TypeScript","Next.js","Git"]},
+  "react":               {core:["React","JavaScript","HTML"],common:["TypeScript","Next.js","Git"]},
+  "backend":             {core:["REST APIs","SQL","Git"],common:["Node.js","Python","Docker"]},
+  "full stack":          {core:["JavaScript","SQL","Git","REST APIs"],common:["React","Node.js","Docker"]},
+  "devops":              {core:["Docker","CI/CD","Linux","Git"],common:["Kubernetes","AWS","Ansible"]},
+  "flutter":             {core:["Flutter","Dart","REST APIs"],common:["Firebase","Git"]},
+  "product manager":     {core:["Agile","Jira","Analytics"],common:["Scrum","SQL"]},
+  "business analyst":    {core:["SQL","Excel","Requirements Analysis"],common:["Power BI","Jira"]},
+  "qa":                  {core:["Manual Testing","Jira","Test Cases"],common:["Selenium","Postman"]},
+  "software engineer":   {core:["Git","REST APIs","SQL"],common:["Docker","Agile","CI/CD"]},
+  "net developer":       {core:["C#",".NET","SQL Server"],common:["ASP.NET","Git","REST APIs"]},
+  "java developer":      {core:["Java","Spring Boot","SQL"],common:["Docker","Git","REST APIs"]},
+  "angular":             {core:["Angular","TypeScript","JavaScript"],common:["RxJS","Git","REST APIs"]},
+  "cloud":               {core:["AWS","Azure","Docker"],common:["Kubernetes","CI/CD","Linux"]},
+  "cybersecurity":       {core:["Linux","Networking","Network Security"],common:["Firewalls","SIEM","Penetration Testing"]},
+  "ai engineer":         {core:["Python","Machine Learning","TensorFlow"],common:["Generative AI","LLMs"]},
+  "node":                {core:["Node.js","JavaScript","REST APIs"],common:["Express","MongoDB","Git"]},
+  "mobile":              {core:["REST APIs","Git"],common:["Flutter","React Native","Firebase"]},
+  "technical support":   {core:["Networking","Windows","Troubleshooting"],common:["TCP/IP","Help Desk","ITIL","Active Directory"]},
+  "help desk":           {core:["Troubleshooting","Windows","Networking"],common:["Help Desk","ITIL","ServiceNow","Active Directory"]},
+  "it support":          {core:["Windows","Networking","Troubleshooting"],common:["Active Directory","Help Desk","Hardware","Linux"]},
+  "network engineer":    {core:["Networking","TCP/IP","Cisco"],common:["Routing","Switching","Firewalls","VPN","DNS"]},
+  "system administrator":{core:["Linux","Windows Server","Active Directory"],common:["Networking","VMware","Bash","Docker"]},
+  "sysadmin":            {core:["Linux","Windows Server","Networking"],common:["Active Directory","Bash","VMware","DNS"]},
+  "odoo":                {core:["Odoo","Python","SQL"],common:["ERP","Linux","PostgreSQL","Git"]},
+  "erp":                 {core:["ERP","SQL","Python"],common:["SAP","Dynamics 365","Odoo","Excel"]},
+  "sap":                 {core:["SAP","SQL","Excel"],common:["SAP ABAP","SAP HANA","ERP"]},
 };
 
-const KNOWN_TECH_SKILLS = [
-  'Python','SQL','Power BI','Tableau','Excel','Pandas','NumPy','R',
-  'PostgreSQL','MySQL','MongoDB','Redis','Oracle','SQL Server','Snowflake',
-  'BigQuery','dbt','Airflow','Kafka','Docker','Kubernetes','AWS','Azure',
-  'GCP','Google Cloud','Git','GitHub','CI/CD','Linux','React','Next.js',
-  'TypeScript','JavaScript','Node.js','Express','FastAPI','Django','Flask',
-  'Java','Spring Boot','C#','.NET','C++','Go','PHP','Laravel','Angular',
-  'Vue.js','Tailwind CSS','GraphQL','REST APIs','Agile','Scrum','Jira',
-  'Data Modeling','ETL','Machine Learning','Deep Learning',
-  'NLP','TensorFlow','PyTorch','Scikit-Learn','Statistics',
-  'Selenium','Postman','Flutter','Dart','Firebase','DAX','Spark',
-  'Ansible','Terraform','Prometheus','Grafana','Elasticsearch',
+
+const UNRELATED_TITLE_PATTERNS = [
+  /\b(accountant|accounting|finance|financial|treasury|auditor|audit)\b/i,
+  /\b(sales|retail|customer service|call center|telemarketing|account executive)\b/i,
+  /\b(hr|human resources|talent acquisition|recruiter|payroll|personnel)\b/i,
+  /\b(marketing|brand|seo|social media manager|content creator|graphic design)\b/i,
+  /\b(supply chain|logistics|procurement|warehouse|inventory|purchasing|import|export)\b/i,
+  /\b(legal|lawyer|attorney|compliance officer)\b/i,
+  /\b(teacher|instructor|trainer|professor|lecturer)\b/i,
+  /\b(doctor|nurse|pharmacist|medical|clinical|dental|patient care|biomedical)\b/i,
+  /\b(chef|cook|food|hospitality|hotel|tourism|restaurant)\b/i,
+  /\b(driver|delivery|courier|transport|fleet)\b/i,
+  /\b(secretary|receptionist|office manager|administrative assistant|data entry)\b/i,
+  /\b(factory|manufacturing|quality control inspector|production|petroleum)\b/i,
+  /\b(civil engineer|structural|architectural|mechanical engineer|electrical engineer)\b/i,
+  /\b(real estate|property|construction manager)\b/i,
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 function genId(url) {
-  return 'wuzzuf_' + crypto.createHash('md5').update(url).digest('hex').slice(0, 16);
+  return "wuzzuf_" + crypto.createHash("md5").update(url).digest("hex").slice(0, 16);
 }
-function cleanText(t) { return t.replace(/\s+/g, ' ').trim(); }
+
 function normalizeSkill(raw) {
   if (!raw) return null;
-  const trimmed = raw.trim();
-  if (trimmed.length < 2) return null;
-  const key = trimmed.toLowerCase().replace(/\s+/g,' ');
-  return SKILL_ALIASES[key] || trimmed;
+  const s = raw.replace(/^[\s\u2022\u25CF\-\*\t]+/, "").replace(/[:\s]+$/, "").trim();
+  if (s.length < 2) return null;
+  return SKILL_ALIASES[s.toLowerCase().replace(/\s+/g," ")] || s;
 }
+
+// Skills that should never appear in job skill tags
+const SCRAPER_SKILL_BLACKLIST = new Set([
+  'experienced','experience','senior','junior','mid level','expert','manager',
+  'internship','intern','student','entry level','fresh graduate','fresher',
+  'it','information technology','software development','engineering',
+  'general','other','miscellaneous','ability','skills','knowledge',
+  'strong','good','excellent','proficient','familiar','basic','advanced',
+  'full time','part time','contract','freelance','remote','project',
+  'education','teaching','training','instructor','analyst','research',
+  'communication','teamwork','leadership','problem solving','critical thinking',
+  'customer service','support','retail','administration',
+]);
+
 function dedupeSkills(skills) {
   const seen = new Set();
-  return skills
-    .map(s => normalizeSkill(s))
-    .filter(s => {
-      if (!s) return false;
-      const lo = s.toLowerCase();
-      if (SKILL_BLACKLIST.has(lo)) return false;
-      if (s.length < 2 || s.length > 40) return false;
-      if (/^\d+$/.test(s)) return false;
-      if (s.split(/\s+/).length > 4) return false;
-      if (seen.has(lo)) return false;
-      seen.add(lo);
-      return true;
-    });
+  return skills.map(s => normalizeSkill(s)).filter(s => {
+    if (!s) return false;
+    const lo = s.toLowerCase().replace(/\s+/g," ");
+    if (s.length < 2 || s.length > 40) return false;
+    if (/^\d+$/.test(s)) return false;
+    if (s.split(/\s+/).length > 4) return false;
+    if (SCRAPER_SKILL_BLACKLIST.has(lo)) return false;
+    // Accept if it's in the known list OR in aliases OR came from Wuzzuf keywords (already tech-specific)
+    const inKnown = KNOWN_TECH_SKILLS.has(s) || [...KNOWN_TECH_SKILLS].some(k => k.toLowerCase()===lo);
+    const inAlias = Object.values(SKILL_ALIASES).some(v => v.toLowerCase()===lo);
+    // Also allow short technical terms (2-15 chars) that look like tech acronyms/products
+    const looksLikeTech = /^[A-Z][a-zA-Z0-9#+.\-]{1,14}$/.test(s) && !/^(The|For|With|And|But|From|This|That|Your|Our|Their|Have|Will|Can|Are|Was|Not|Any|All|Each|Its)$/i.test(s);
+    if (!inKnown && !inAlias && !looksLikeTech) return false;
+    if (seen.has(lo)) return false;
+    seen.add(lo); return true;
+  });
 }
-function inferSkillsFromTitle(title) {
-  const t = title.toLowerCase();
-  for (const [key, profile] of Object.entries(ROLE_SKILL_PROFILES)) {
-    if (t.includes(key)) {
-      return dedupeSkills([...profile.core, ...profile.common]);
-    }
-  }
-  return [];
-}
+
 function extractSkillsFromText(text) {
+  if (!text) return [];
   const found = new Set();
   for (const skill of KNOWN_TECH_SKILLS) {
-    const escaped = skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (new RegExp(`(?<![a-zA-Z])${escaped}(?![a-zA-Z])`, 'i').test(text)) {
-      found.add(skill);
-    }
+    const escaped = skill.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+    if (new RegExp(`(?<![a-zA-Z])${escaped}(?![a-zA-Z])`,"i").test(text)) found.add(skill);
   }
   return [...found];
 }
-function parseSeniority(text) {
-  const t = text.toLowerCase();
-  if (/entry|fresh|graduate|intern|0[-–]1|trainee/.test(t)) return 'Fresh';
-  if (/junior|1[-–][23]/.test(t)) return 'Junior';
-  if (/senior|lead|principal|manager|5\+|7\+/.test(t)) return 'Senior';
+
+function inferSkillsFromTitle(title) {
+  const t = title.toLowerCase();
+  for (const [key, profile] of Object.entries(ROLE_SKILL_PROFILES)) {
+    if (t.includes(key)) return dedupeSkills([...profile.core,...profile.common]);
+  }
+  return [];
+}
+
+
+function parseSeniority(careerLevel, title, fullText = '') {
+  const t = (title || '').toLowerCase().trim();
+  const text = `${title || ''} ${fullText || ''}`.toLowerCase();
+
+  // 1. STRICT TITLE CHECK (Absolute Sovereign Priority)
+  // Senior titles can NEVER be Fresh or Junior
+  if (/\b(senior|sr\.|lead|principal|architect|director|head of|manager|chief|pmo|lead engineer)\b/i.test(t) && 
+      !/\b(junior|assistant to|trainee|intern)\b/i.test(t)) {
+    return 'Senior';
+  }
+
+  // Explicit Fresh / Intern / Trainee titles
+  if (/\b(fresh|graduate|intern|trainee|student|entry[- ]level)\b/i.test(t)) {
+    return 'Fresh';
+  }
+
+  // Explicit Junior titles
+  if (/\b(junior|jr\.|associate)\b/i.test(t)) {
+    return 'Junior';
+  }
+
+  // 2. YEARS OF EXPERIENCE EXTRACTED FROM REQUIREMENTS / TEXT
+  const expMatch = text.match(/(?:experience needed|experience|years of experience|خبرة لا تقل عن|خبرة)\s*:\s*(\d+)\s*(?:[-–—~]|to|إلى|الي)\s*(\d+)\s*(?:years?|yrs?|سنوات|سنة)/i) ||
+                   text.match(/(\d+)\s*(?:[-–—~]|to|إلى|الي)\s*(\d+)\s*(?:years?|yrs?|سنوات|سنة)\s*(?:of\s+)?experience/i) ||
+                   text.match(/(?:at least|minimum|min\.?|\+)\s*(\d+)\s*(?:years?|yrs?|سنوات|سنة)\s*(?:of\s+)?experience/i) ||
+                   text.match(/(\d+)\s*\+\s*(?:years?|yrs?|سنوات|سنة)/i);
+
+  if (expMatch) {
+    const min = parseInt(expMatch[1], 10);
+    const max = expMatch[2] ? parseInt(expMatch[2], 10) : min;
+    if (min >= 5 || max >= 7) return 'Senior';
+    if (min >= 3) return 'Mid';
+    if (min === 0 || max <= 1) return 'Fresh';
+    if (min <= 2 && max <= 3) return 'Junior';
+  }
+
+  // 3. WUZZUF CAREER LEVEL FALLBACK (Only when title & text are neutral)
+  const levelStr = typeof careerLevel === 'object'
+    ? (careerLevel?.name || careerLevel?.hint || '')
+    : (careerLevel || '');
+  const lvl = levelStr.toLowerCase();
+  if (/student|entry level|graduate/i.test(lvl)) return 'Fresh';
+  if (/junior/i.test(lvl)) return 'Junior';
+  if (/senior|management|manager|director/i.test(lvl)) return 'Senior';
+  if (/experienced/i.test(lvl)) return 'Mid';
+
   return 'Mid';
 }
-function parseWorkType(text) {
-  const t = text.toLowerCase();
-  if (/hybrid/.test(t)) return { workType: 'Hybrid', isRemote: false };
-  if (/remote|work from home|عن بعد/.test(t)) return { workType: 'Remote', isRemote: true };
+
+function parseWorkType(arrangement) {
+  const str = typeof arrangement === 'object'
+    ? (arrangement?.displayedName || arrangement?.translations?.displayed_name?.en || '')
+    : (arrangement || '');
+  const a = str.toLowerCase();
+  if (/hybrid/i.test(a)) return { workType: 'Hybrid', isRemote: false };
+  if (/remote|work from home|عن بعد/i.test(a)) return { workType: 'Remote', isRemote: true };
   return { workType: 'On-site', isRemote: false };
 }
-function extractSalaryFromCardText(cardText) {
-  if (!cardText) return 'تحدد أثناء المقابلة';
-  const match = cardText.match(/(\d[\d,]*\s*(?:to|-|–)\s*\d[\d,]*\s*(?:EGP|USD|EUR|ج\.م|\$)[^\n•,]*)/i);
-  if (match) return match[1].trim();
-  return 'تحدد أثناء المقابلة';
-}
-function parseRelativeDate(text) {
-  if (!text?.trim()) return null;
-  const t = text.toLowerCase().trim();
-  const now = new Date();
-  const h = t.match(/(\d+)\s*(?:hour|hours|hr|ساعة|ساعات)/);
-  if (h) { now.setHours(now.getHours() - +h[1]); return now.toISOString(); }
-  const d = t.match(/(\d+)\s*(?:day|days|يوم|أيام)/);
-  if (d) { now.setDate(now.getDate() - +d[1]); return now.toISOString(); }
-  const w = t.match(/(\d+)\s*(?:week|weeks|أسبوع|أسابيع)/);
-  if (w) { now.setDate(now.getDate() - +w[1] * 7); return now.toISOString(); }
-  const m = t.match(/(\d+)\s*(?:month|months|شهر|أشهر)/);
-  if (m) { now.setMonth(now.getMonth() - +m[1]); return now.toISOString(); }
-  if (/just now|الآن|اليوم|today/.test(t)) return now.toISOString();
-  return null; // NEVER fake a date
-}
+
 function translateTitle(title) {
   const t = title.toLowerCase();
-  let pfx = /senior|lead|principal/.test(t) ? 'أول ' : /junior|entry/.test(t) ? 'مبتدئ ' : '';
+  const pfx = /senior|lead|principal/.test(t) ? "أول " : /junior|entry/.test(t) ? "مبتدئ " : "";
   if (/data analyst/.test(t)) return `محلل بيانات ${pfx}`.trim();
   if (/data engineer/.test(t)) return `مهندس بيانات ${pfx}`.trim();
   if (/data scientist/.test(t)) return `عالم بيانات ${pfx}`.trim();
-  if (/business intelligence|bi developer/.test(t)) return `مطور ذكاء أعمال (BI) ${pfx}`.trim();
   if (/machine learning|ai engineer/.test(t)) return `مهندس ذكاء اصطناعي ${pfx}`.trim();
   if (/frontend|front-end|react developer/.test(t)) return `مطور واجهات أمامية ${pfx}`.trim();
   if (/backend|back-end/.test(t)) return `مطور خلفية (Backend) ${pfx}`.trim();
-  if (/full.?stack|fullstack/.test(t)) return `مطور برمجيات شامل ${pfx}`.trim();
+  if (/full.?stack/.test(t)) return `مطور برمجيات شامل ${pfx}`.trim();
   if (/devops|cloud engineer/.test(t)) return `مهندس DevOps ${pfx}`.trim();
   if (/product manager/.test(t)) return `مدير منتجات رقمية ${pfx}`.trim();
   if (/business analyst/.test(t)) return `محلل نظم وأعمال ${pfx}`.trim();
   if (/power bi/.test(t)) return `مطور تقارير Power BI ${pfx}`.trim();
   if (/flutter|mobile developer/.test(t)) return `مطور تطبيقات هواتف ${pfx}`.trim();
   if (/qa|quality assurance/.test(t)) return `مهندس جودة (QA) ${pfx}`.trim();
+  if (/software engineer|software developer/.test(t)) return `مهندس برمجيات ${pfx}`.trim();
+  if (/cybersecurity/.test(t)) return `مهندس أمن معلومات ${pfx}`.trim();
+  if (/net developer|c# developer/.test(t)) return `مطور .NET ${pfx}`.trim();
+  if (/java developer/.test(t)) return `مطور Java ${pfx}`.trim();
+  if (/node/.test(t)) return `مطور Node.js ${pfx}`.trim();
   return title;
 }
+
 function translateLocation(loc) {
-  const l = loc.toLowerCase();
-  if (/sheikh zayed|zayed/.test(l)) return 'الشيخ زايد، الجيزة';
-  if (/6th of october|october/.test(l)) return 'السادس من أكتوبر، الجيزة';
-  if (/smart village/.test(l)) return 'القرية الذكية، الجيزة';
-  if (/new cairo|tagamoa/.test(l)) return 'القاهرة الجديدة، القاهرة';
-  if (/maadi/.test(l)) return 'المعادي، القاهرة';
-  if (/nasr city/.test(l)) return 'مدينة نصر، القاهرة';
-  if (/heliopolis/.test(l)) return 'مصر الجديدة، القاهرة';
-  if (/dokki/.test(l)) return 'الدقي، الجيزة';
-  if (/mohandessin/.test(l)) return 'المهندسين، الجيزة';
-  if (/giza/.test(l)) return 'الجيزة، مصر';
-  if (/alexandria|alex/.test(l)) return 'الإسكندرية، مصر';
-  if (/cairo/.test(l)) return 'القاهرة، مصر';
-  if (/remote/.test(l)) return 'عن بُعد (مصر)';
-  return loc;
+  const l = (loc||"").toLowerCase();
+  if (/sheikh zayed|zayed/.test(l)) return "الشيخ زايد، الجيزة";
+  if (/6th of october|october/.test(l)) return "السادس من أكتوبر، الجيزة";
+  if (/smart village/.test(l)) return "القرية الذكية، الجيزة";
+  if (/new cairo|tagamoa/.test(l)) return "القاهرة الجديدة، القاهرة";
+  if (/maadi/.test(l)) return "المعادي، القاهرة";
+  if (/nasr city/.test(l)) return "مدينة نصر، القاهرة";
+  if (/heliopolis/.test(l)) return "مصر الجديدة، القاهرة";
+  if (/dokki/.test(l)) return "الدقي، الجيزة";
+  if (/mohandessin/.test(l)) return "المهندسين، الجيزة";
+  if (/giza/.test(l)) return "الجيزة، مصر";
+  if (/alexandria|alex/.test(l)) return "الإسكندرية، مصر";
+  if (/cairo/.test(l)) return "القاهرة، مصر";
+  if (/remote/.test(l)) return "عن بُعد (مصر)";
+  return loc || "القاهرة، مصر";
 }
+
+function parseSalary(salaryAttr, hideSalary) {
+  if (hideSalary || !salaryAttr) return "تحدد أثناء المقابلة";
+  const {min, max, currency} = salaryAttr;
+  if (!min && !max) return "تحدد أثناء المقابلة";
+  const curr = currency || "EGP";
+  if (min && max) return `${Number(min).toLocaleString()} - ${Number(max).toLocaleString()} ${curr}`;
+  if (max) return `Up to ${Number(max).toLocaleString()} ${curr}`;
+  if (min) return `From ${Number(min).toLocaleString()} ${curr}`;
+  return "تحدد أثناء المقابلة";
+}
+
+function parsePostedAt(dateStr) {
+  if (!dateStr) return null;
+  try {
+    const raw = String(dateStr).trim();
+    const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}:\d{1,2}:\d{1,2})/);
+    if (m) {
+      const month = m[1].padStart(2, '0');
+      const day = m[2].padStart(2, '0');
+      const year = m[3];
+      const time = m[4];
+      return `${year}-${month}-${day}T${time}.000Z`;
+    }
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  } catch {}
+  return null;
+}
+
 function classifyQuality(job) {
   const hasVerified = (job.required_skills?.length ?? 0) >= 2;
   const hasInferred = (job.inferred_skills?.length ?? 0) >= 1;
   const hasDate = !!job.posted_at;
   const hasCompany = !!job.company;
-  if (hasVerified && hasDate && hasCompany) return 'verified';
-  if (hasVerified || (hasInferred && hasDate)) return 'partial';
-  if (hasInferred) return 'inferred';
-  return 'unresolved';
-}
-function enrichPriority(job) {
-  let s = 0;
-  if ((job.required_skills?.length ?? 0) === 0) s += 50;
-  if ((job.required_skills?.length ?? 0) < 2) s += 20;
-  if (!job.company) s += 20;
-  if (!job.posted_at) s += 15;
-  return s;
+  if (hasVerified && hasDate && hasCompany) return "verified";
+  if (hasVerified || (hasInferred && hasDate)) return "partial";
+  if (hasInferred) return "inferred";
+  return "unresolved";
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HTTP
-// ─────────────────────────────────────────────────────────────────────────────
-async function fetchWithRetry(url, maxRetries = 2) {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+async function apiFetch(params) {
+  const url = `${WUZZUF_API}?${new URLSearchParams(params).toString()}`;
+  for (let attempt = 0; attempt <= 2; attempt++) {
     try {
-      const res = await fetch(url, {
-        headers: BROWSER_HEADERS,
-        signal: AbortSignal.timeout(15000),
-      });
+      const res = await fetch(url, {headers: API_HEADERS, signal: AbortSignal.timeout(20000)});
       if (res.status === 429) {
-        const wait = 2500 * Math.pow(2, attempt) + Math.random() * 500;
-        console.warn(`  ⚠️  Rate limited — wait ${Math.round(wait)}ms`);
+        const wait = 3000 * Math.pow(2, attempt);
+        console.warn(`  ⚠️  Rate limited — waiting ${wait}ms`);
         await new Promise(r => setTimeout(r, wait));
         continue;
       }
-      if (!res.ok) { console.warn(`  ⚠️  HTTP ${res.status} — ${url.slice(0,70)}`); return null; }
-      return await res.text();
-    } catch(e) {
-      if (attempt === maxRetries) { console.warn(`  ❌ Fetch failed: ${e.message}`); return null; }
+      if (!res.ok) { console.warn(`  ⚠️  HTTP ${res.status} — ${url.slice(0,80)}`); return null; }
+      return await res.json();
+    } catch (e) {
+      if (attempt === 2) { console.warn(`  ❌ Fetch failed: ${e.message}`); return null; }
       await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
     }
   }
   return null;
 }
 
-async function runConcurrent(items, concurrency, fn) {
-  const results = new Array(items.length);
-  let idx = 0;
-  async function worker() {
-    while (idx < items.length) { const i = idx++; results[i] = await fn(items[i]); }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
-  return results;
-}
+function buildJob(item, companiesById) {
+  const a = item.attributes;
+  const companyId = item.relationships?.company?.data?.id;
+  const companyData = companiesById.get(companyId);
+  const company = companyData?.attributes?.name || null;
+  const logoFile = companyData?.attributes?.logo || a.logo || null;
+  const companyLogo = logoFile
+    ? (logoFile.startsWith("http") ? logoFile : `https://media.wuzzuf.net/files/company_logo/${logoFile}`)
+    : null;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Card Extractors
-// ─────────────────────────────────────────────────────────────────────────────
-function extractTitle($card, $) {
-  return cleanText(
-    $card.find('h2').first().text() ||
-    $card.find('h3').first().text() ||
-    $card.find('a[href*="/job/"]').first().text()
-  ) || null;
-}
-function extractJobUrl($card) {
-  const href = $card.find('h2 a[href*="/jobs/p/"]').first().attr('href') ||
-               $card.find('h2 a[href*="/job/"]').first().attr('href') ||
-               $card.find('h2 a[href*="/internship/"]').first().attr('href') ||
-               $card.find('h3 a[href*="/jobs/p/"]').first().attr('href') ||
-               $card.find('h3 a[href*="/job/"]').first().attr('href') ||
-               $card.find('a[href*="/jobs/p/"]').first().attr('href') ||
-               $card.find('a[href*="/job/"]').first().attr('href') ||
-               $card.find('a[href*="/internship/"]').first().attr('href');
+  const title = (a.title || "").trim();
+  if (!title) return null;
+  if (UNRELATED_TITLE_PATTERNS.some(p => p.test(title))) return null;
 
-  if (!href) return null;
-
-  // Reject company profiles, directories, searches
-  if (/\/jobs\/careers\/|\/company\/|\/companies\/|\/careers\/|search\/|location=|city=|skills=|filters=/i.test(href)) {
+  const cityName = a.location?.city?.name || "";
+  const countryName = a.location?.country?.name || "";
+  if (countryName && !/(egypt|eg)/i.test(countryName) && !/(remote|work from home)/i.test(a.workplaceArrangement || "")) {
     return null;
   }
 
-  try { return new URL(href, WUZZUF_BASE).toString(); } catch { return href.startsWith('http') ? href : `${WUZZUF_BASE}${href}`; }
-}
-function extractCompany($card) {
-  let c = $card.find('a[href*="/jobs/careers/"]').first().text().trim();
-  if (!c || c.length < 2) {
-    const alt = $card.find('img[alt*="Jobs and Careers"]').attr('alt') || '';
-    if (alt) c = alt.replace(/^Jobs and Careers at /i,'').replace(/ Egypt$/i,'').trim();
-  }
-  if (!c || c.length < 2) {
-    const href = $card.find('a[href*="/jobs/careers/"]').attr('href') || '';
-    const m = href.match(/careers\/(.*?)(?:-Egypt)?-\d+/);
-    if (m?.[1]) c = decodeURIComponent(m[1].replace(/-/g,' '));
-  }
-  if (!c || c.length < 2) {
-    return /confidential/i.test($card.text()) ? 'Confidential' : null;
-  }
-  return c.replace(/\s*[-–—]\s*(?:New Cairo|Cairo|Giza|Alexandria|Smart Village|Maadi|Egypt|مصر).*$/i,'').replace(/[-–—]$/,'').trim() || null;
-}
-function extractLogo($card) {
-  const img = $card.find('img[src*="company_logo"], a[href*="/jobs/careers/"] img').first();
-  const src = img.attr('src') || img.attr('data-src') || null;
-  if (!src || src.startsWith('data:') || /placeholder|default/i.test(src)) return null;
-  return src.startsWith('http') ? src : `${WUZZUF_BASE}${src}`;
-}
-function extractLocation($card) {
-  return cleanText(
-    $card.find('a[href*="location="], a[href*="city="]').first().text() ||
-    $card.find('[class*="location"],[class*="css-5wys0k"],[class*="css-16x61xq"]').first().text()
-  ) || 'Cairo, Egypt';
-}
-function extractBadges($card) {
-  const tags = [];
-  $card.find('a[href*="Full-Time"],a[href*="Part-Time"],a[href*="Remote"],a[href*="On-Site"],a[href*="Hybrid"],a[href*="experience="],a[href*="level="]').each((_,el) => {
-    const t = $card.find(el).text().trim(); if (t) tags.push(t);
-  });
-  return tags;
-}
-function extractSkillTags($card) {
-  const tags = [];
-  // Priority 1: URL-pattern skill links (stable across Wuzzuf HTML changes)
-  $card.find('a[href*="-Jobs-in-Egypt"],a[href*="skills="],a[href*="skill="]').each((_,el) => {
-    const txt = $card.find(el).text().replace(/^[·\s]+/,'').trim();
-    if (txt && txt.length >= 2 && txt.length <= 35 && !/full.?time|part.?time|on.?site|remote|hybrid|years/i.test(txt)) {
-      tags.push(txt);
-    }
-  });
-  // Priority 2: Legacy hash classes (fragile fallback)
-  if (tags.length === 0) {
-    $card.find('[class*="css-5x9"]').each((_,el) => {
-      const txt = $card.find(el).text().replace(/^[·\s]+/,'').trim();
-      if (txt && txt.length >= 2 && txt.length <= 35) tags.push(txt);
-    });
-  }
-  return tags;
-}
-function extractDate($card) {
-  // 1. time[datetime]
-  const timeEl = $card.find('time').first();
-  if (timeEl.length) {
-    const dt = timeEl.attr('datetime');
-    if (dt) { try { return new Date(dt).toISOString(); } catch {} }
-    const parsed = parseRelativeDate(timeEl.text());
-    if (parsed) return parsed;
-  }
-  // 2. Text scan for relative dates
-  let found = null;
-  $card.find('*').each((_, el) => {
-    if (found) return;
-    const t = $card.find(el).clone().children().remove().end().text().trim();
-    if (/(\d+\s*(minute|hour|day|week|month)s?\s*ago)|منذ\s*\d+/i.test(t)) found = parseRelativeDate(t);
-  });
-  if (found) return found;
-  // 3. Hash-class fallback
-  const dateText = $card.find('[class*="date"],[class*="time"],[class*="posted"],[class*="css-1jldrig"],[class*="css-do2t5m"]').first().text().trim();
-  return parseRelativeDate(dateText); // may be null — that's correct
-}
+  const location = cityName || countryName || "Cairo, Egypt";
+  const {workType, isRemote} = parseWorkType(a.workplaceArrangement);
+  const postedAt = parsePostedAt(a.postedAt);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Detail Page Enrichment
-// ─────────────────────────────────────────────────────────────────────────────
-const DETAIL_HEADINGS = [
-  'job requirements','requirements','qualifications','what you will need',
-  'skills required','skills & experience','responsibilities','job description',
-  'about the role','what we\'re looking for','preferred qualifications','nice to have',
-];
-async function enrichJob(job) {
-  if (job.required_skills.length >= 3 && job.posted_at && job.company) return job;
-  const html = await fetchWithRetry(job.apply_url, 1);
-  if (!html) return job;
-  const $ = cheerio.load(html);
+  const descText = (a.description || "") + " " + (a.requirements || "");
+  const seniority = parseSeniority(a.careerLevel?.name, title, descText);
 
-  let required = '', preferred = '';
-  $('h1,h2,h3,h4,strong,b').each((_, el) => {
-    const heading = $(el).text().trim().toLowerCase();
-    if (DETAIL_HEADINGS.some(h => heading.includes(h))) {
-      const section = $(el).closest('section,div,article').text();
-      if (/preferred|nice.?to.?have|bonus/i.test(heading)) preferred += ' ' + section;
-      else required += ' ' + section;
-    }
-  });
-  if (required.trim().length < 80) required = $('main,article').text();
-  const fullText = [required, preferred].join(' ');
-  const verifiedSkills = dedupeSkills(extractSkillsFromText(fullText));
-  const prefSkills = preferred ? dedupeSkills(extractSkillsFromText(preferred)) : [];
-  const reqVerified = verifiedSkills.filter(s => !prefSkills.includes(s));
+  const keywordSkills = (a.keywords || []).map(k => k.name).filter(Boolean);
+  const descSkills = extractSkillsFromText(descText);
+  const titleSkills = extractSkillsFromText(title);
 
-  let posted_at = job.posted_at;
-  if (!posted_at) {
-    let exactDateStr = $('span.css-154erwh, span[class*="css-154erwh"]').first().text().trim();
-    if (!exactDateStr) {
-      $('*').each((_, el) => {
-        if (exactDateStr) return;
-        const t = $(el).clone().children().remove().end().text().trim();
-        if (/^posted\s+\d+\s+(?:hour|day|week|month)s?\s+ago/i.test(t)) {
-          exactDateStr = t;
-        }
-      });
-    }
-    if (exactDateStr) {
-      posted_at = parseRelativeDate(exactDateStr);
-    }
-    if (!posted_at) {
-      const timeEl = $('time').first();
-      const dt = timeEl.attr('datetime');
-      if (dt) { try { posted_at = new Date(dt).toISOString(); } catch {} }
-    }
-    if (!posted_at) {
-      const rel = $('body').text().match(/(?:posted\s+)?(\d+\s*(?:hour|day|week|month)s?\s*ago)/i)?.[0];
-      if (rel) posted_at = parseRelativeDate(rel);
-    }
-  }
+  const verifiedSkills = dedupeSkills([...keywordSkills, ...descSkills, ...titleSkills]);
+  const allSkills = verifiedSkills.length >= 2 ? verifiedSkills : inferSkillsFromTitle(title);
 
-  const enriched = {
-    ...job,
-    required_skills: reqVerified.length > 0 ? reqVerified : job.required_skills,
-    preferred_skills: prefSkills.length > 0 ? prefSkills : job.preferred_skills,
-    posted_at,
-    description: cleanText(required).slice(0, 800) || job.description,
-    requirements: cleanText(preferred).slice(0, 600) || job.requirements,
-    last_enriched_at: new Date().toISOString(),
-    skill_source: reqVerified.length > 0
-      ? [...new Set([...job.skill_source, 'job_description'])]
-      : job.skill_source,
+  const applyUrl = a.slug ? `${WUZZUF_BASE}/jobs/p/${a.slug}` : `${WUZZUF_BASE}${a.uri || ""}`;
+
+  return {
+    id: genId(applyUrl),
+    title,
+    title_ar: translateTitle(title),
+    company: company || 'شركة رائدة',
+    company_ar: company || 'شركة رائدة',
+    company_logo: companyLogo,
+    location,
+    location_ar: translateLocation(location),
+    work_type: workType,
+    is_remote: isRemote,
+    seniority,
+    salary_range: parseSalary(a.salary, a.hideSalary),
+    salary_min: a.salary?.min || null,
+    salary_max: a.salary?.max || null,
+    salary_currency: a.salary?.currency || 'EGP',
+    required_skills: allSkills,
+    description: (a.description || `Exciting opportunity for ${title} at ${company || "a leading company"} in ${location}.`).slice(0, 3000),
+    requirements: (a.requirements || allSkills.slice(0, 5).map(s => `• Experience with ${s}`).join("\n")).slice(0, 3000),
+    apply_url: applyUrl,
+    source: "wuzzuf",
+    posted_at: postedAt,
   };
-  enriched.data_quality = classifyQuality(enriched);
-  return enriched;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Listing Scraper
+// 1. Discover Tech Slugs from Sitemaps (Cloudflare Safe: XML endpoints return 200)
 // ─────────────────────────────────────────────────────────────────────────────
-async function scrapeQuery(query, maxPages = 2) {
-  const jobs = [];
-  for (let page = 0; page < maxPages; page++) {
-    const url = `${WUZZUF_BASE}/search/jobs/?q=${encodeURIComponent(query)}&a=hpb&start=${page}`;
-    const html = await fetchWithRetry(url, 2);
-    if (!html) continue;
+async function discoverSlugsFromSitemaps() {
+  console.log("🗺️  Phase 1: Discovering Tech Slugs via Sitemaps...");
+  const sitemaps = [
+    "https://wuzzuf.net/sitemap-job-1.xml",
+    "https://wuzzuf.net/sitemap-job-2.xml",
+  ];
+  const techSlugs = new Set();
+
+  for (const sitemapUrl of sitemaps) {
     try {
-      const $ = cheerio.load(html);
-      const seenUrls = new Set();
-      $('a[href*="/job/"],a[href*="/jobs/p/"]').each((_, link) => {
-        try {
-          const href = $(link).attr('href');
-          if (!href) return;
-          const fullUrl = href.startsWith('http') ? href : `${WUZZUF_BASE}${href}`;
-          if (seenUrls.has(fullUrl)) return;
-          const $card = $(link).closest('article,li,[class*="css-1gatmva"],[class*="css-pkv5jc"],div.job-card-wuzzuf');
-          if (!$card.length || !$card.find('h2,h3').length) return;
-          seenUrls.add(fullUrl);
-
-          const title = extractTitle($card, $);
-          const applyUrl = extractJobUrl($card) || fullUrl;
-          if (!title || !applyUrl) return;
-
-          // Reject explicitly non-tech / unrelated roles
-          const UNRELATED_TITLE_PATTERNS = [
-            /fabric/i, /yarn/i, /textile/i, /sales manager/i, /sales executive/i,
-            /field sales/i, /telesales/i, /call center/i, /customer service agent/i,
-            /real estate/i, /property consultant/i, /broker/i, /pharmacist/i, /pharma/i,
-            /medical rep/i, /doctor/i, /nurse/i, /civil engineer/i, /architect(?!ure)/i,
-            /site engineer/i, /interior design/i, /accountant(?!.*data)/i, /cashier/i,
-            /receptionist/i, /driver/i, /chef/i, /waiter/i, /technician(?!.*(lab|network|it))/i,
-            /maintenance/i, /procurement/i, /purchasing/i, /storekeeper/i, /warehouse/i,
-          ];
-          if (UNRELATED_TITLE_PATTERNS.some(p => p.test(title))) return;
-
-          const company = extractCompany($card);
-          const logo = extractLogo($card);
-          const location = extractLocation($card);
-          const badges = extractBadges($card);
-          const badgeStr = badges.join(' ');
-          const { workType, isRemote } = parseWorkType(badgeStr + ' ' + location);
-          const seniority = parseSeniority(badgeStr + ' ' + title);
-          const rawTags = extractSkillTags($card);
-          const postedAt = extractDate($card);
-
-          const verifiedFromTags = dedupeSkills([...rawTags, ...extractSkillsFromText(title)]);
-          const inferredSkills = inferSkillsFromTitle(title);
-          const skillSources = [];
-          if (verifiedFromTags.length > 0) skillSources.push('job_tags');
-          if (inferredSkills.length > 0) skillSources.push('title_inference');
-
-          const partial = { required_skills: verifiedFromTags, inferred_skills: inferredSkills, posted_at: postedAt, company };
-          const dataQuality = classifyQuality(partial);
-
-          jobs.push({
-            id: genId(applyUrl),
-            title, title_ar: translateTitle(title),
-            company, company_ar: company,
-            company_logo: logo,
-            location, location_ar: translateLocation(location),
-            work_type: workType, is_remote: isRemote,
-            seniority, salary_range: extractSalaryFromCardText($card.text()),
-            required_skills: verifiedFromTags,
-            inferred_skills: inferredSkills,
-            preferred_skills: [],
-            skill_source: skillSources,
-            data_quality: dataQuality,
-            description: `Exciting opportunity for a ${title} position at ${company ?? 'a leading company'} in ${location}.`,
-            description_ar: `فرصة عمل في ${company ?? 'شركة رائدة'} — ${translateTitle(title)} (${translateLocation(location)})`,
-            requirements: verifiedFromTags.slice(0, 4).map(s => `• Experience with ${s}`).join('\n'),
-            requirements_ar: verifiedFromTags.slice(0, 4).map(s => `• خبرة في ${s}`).join('\n'),
-            apply_url: applyUrl, source: 'wuzzuf',
-            posted_at: postedAt, last_enriched_at: null,
-          });
-        } catch {}
+      console.log(`  📄 Fetching sitemap: ${sitemapUrl}`);
+      const res = await fetch(sitemapUrl, {
+        headers: API_HEADERS,
+        signal: AbortSignal.timeout(20000),
       });
-      console.log(`    Page ${page+1}: found ${jobs.length} jobs so far`);
-      await new Promise(r => setTimeout(r, 1200 + Math.random() * 600));
-    } catch(e) { console.warn(`  ⚠️  Parse error: ${e.message}`); }
+      if (!res.ok) {
+        console.warn(`  ⚠️  HTTP ${res.status} — ${sitemapUrl}`);
+        continue;
+      }
+      const xml = await res.text();
+      const $ = cheerio.load(xml, { xmlMode: true });
+      const urls = [];
+      $("loc").each((_, el) => {
+        const text = $(el).text().trim();
+        if (text) urls.push(text);
+      });
+
+      console.log(`  Found ${urls.length} URLs in ${sitemapUrl}`);
+
+      for (const fullUrl of urls) {
+        const match = fullUrl.match(/\/jobs\/p\/([a-zA-Z0-9_-]+)/);
+        if (!match) continue;
+        const slug = match[1];
+        const lowerSlug = slug.toLowerCase();
+
+        const matchesTech = TECH_SLUG_PATTERNS.some(p => lowerSlug.includes(p));
+        if (!matchesTech) continue;
+
+        if (UNRELATED_TITLE_PATTERNS.some(p => p.test(lowerSlug.replace(/-/g, " ")))) continue;
+
+        techSlugs.add(slug);
+      }
+    } catch (e) {
+      console.warn(`  ⚠️ Sitemap fetch error: ${e.message}`);
+    }
   }
+
+  console.log(`  🎯 Filtered to ${techSlugs.size} unique tech job slugs.\n`);
+  return [...techSlugs];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. Batch Fetch Job Details via Wuzzuf JSON API (15 slugs per call)
+// ─────────────────────────────────────────────────────────────────────────────
+async function fetchBatchBySlugs(slugs) {
+  console.log(`🚀 Phase 2: Enriching ${slugs.length} Tech Jobs via Wuzzuf JSON API...`);
+  const jobs = [];
+  const CHUNK_SIZE = 15;
+
+  for (let i = 0; i < slugs.length; i += CHUNK_SIZE) {
+    const chunk = slugs.slice(i, i + CHUNK_SIZE);
+    const url = `${WUZZUF_API}?filter[slug]=${chunk.join(",")}&include=company`;
+
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      try {
+        const res = await fetch(url, {
+          headers: API_HEADERS,
+          signal: AbortSignal.timeout(15000),
+        });
+
+        if (res.status === 429) {
+          const wait = 3000 * Math.pow(2, attempt);
+          console.warn(`  ⚠️  Rate limited — waiting ${wait}ms`);
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
+
+        if (!res.ok) {
+          console.warn(`  ⚠️  HTTP ${res.status} for batch ${Math.floor(i / CHUNK_SIZE) + 1}`);
+          break;
+        }
+
+        const json = await res.json();
+        const companiesById = new Map(
+          (json.included || []).filter(item => item.type === "company").map(c => [c.id, c])
+        );
+
+        for (const item of (json.data || [])) {
+          const job = buildJob(item, companiesById);
+          if (job) jobs.push(job);
+        }
+        break;
+      } catch (e) {
+        if (attempt === 2) console.warn(`  ❌ Batch error: ${e.message}`);
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    process.stdout.write(`  🚀 Processed ${Math.min(i + CHUNK_SIZE, slugs.length)}/${slugs.length} slugs (${jobs.length} tech jobs enriched)\r`);
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  console.log(`\n  ✅ Batch Enrichment Complete: ${jobs.length} jobs ready.\n`);
   return jobs;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DB Migration (runs before scraping)
+// 3. Supplemental: Latest Active Jobs via API Feed
 // ─────────────────────────────────────────────────────────────────────────────
-const QUALITY_RANK = { unresolved: 0, inferred: 1, partial: 2, verified: 3 };
+async function fetchLatestActiveJobs(maxPages = 4) {
+  console.log("⚡ Phase 3: Fetching Latest Active Jobs from API Feed...");
+  const supplementalJobs = [];
 
-async function runMigration() {
-  console.log('\n🗄️  Running DB schema migration...');
+  for (let page = 1; page <= maxPages; page++) {
+    const url = `${WUZZUF_API}?filter[status]=active&sort=-postedAt&include=company&page[number]=${page}&page[size]=50`;
+    try {
+      const res = await fetch(url, { headers: API_HEADERS, signal: AbortSignal.timeout(15000) });
+      if (!res.ok) break;
+      const json = await res.json();
+      const companiesById = new Map(
+        (json.included || []).filter(item => item.type === "company").map(c => [c.id, c])
+      );
 
-  // We use Supabase's direct PostgREST for reads/writes, but DDL needs psql.
-  // Instead, we test if new columns exist by trying to select them.
-  const { data, error } = await supabase
-    .from('jobs')
-    .select('id, data_quality, inferred_skills, preferred_skills, skill_source, last_enriched_at')
-    .limit(1);
+      for (const item of (json.data || [])) {
+        const a = item.attributes;
+        if (!a || !a.title) continue;
 
-  if (!error) {
-    console.log('  ✅ New columns already exist — migration not needed.');
-    return true;
+        const isTechRole = a.workRoles?.some(r => r.id === 16 || /it\/software/i.test(r.name));
+        const matchesTech = isTechRole || TECH_SLUG_PATTERNS.some(p => (a.slug || a.title).toLowerCase().includes(p));
+        if (!matchesTech) continue;
+        if (UNRELATED_TITLE_PATTERNS.some(p => p.test(a.title))) continue;
+
+        const country = a.location?.country?.name || "";
+        if (country && !/(egypt|eg)/i.test(country) && !/(remote|work from home)/i.test(a.workplaceArrangement || "")) {
+          continue;
+        }
+
+        const job = buildJob(item, companiesById);
+        if (job) supplementalJobs.push(job);
+      }
+      await new Promise(r => setTimeout(r, 400));
+    } catch {}
   }
 
-  if (error.message?.includes('column') || error.message?.includes('does not exist')) {
-    console.log('  ⚠️  New columns missing. Please run scripts/db-migration-scraper-v2.sql in your Supabase SQL Editor first.');
-    console.log('  ℹ️  Continuing with scraping using existing schema...');
-    return false; // signal: use old schema
-  }
-
-  console.log(`  ❌ DB check error: ${error.message}`);
-  return false;
+  console.log(`  ✅ Supplemental Phase: ${supplementalJobs.length} fresh active tech jobs.\n`);
+  return supplementalJobs;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Main
+// 4. Main Controller
 // ─────────────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log('═════════════════════════════════════════════════════════');
-  console.log('  3watly Wuzzuf Scraper v2 — Full Run');
-  console.log(`  Started: ${new Date().toLocaleString('ar-EG')}`);
-  console.log('═════════════════════════════════════════════════════════\n');
+  console.log("═════════════════════════════════════════════════════════");
+  console.log("  3watly Wuzzuf Scraper v3 — Cloudflare-Safe Engine");
+  console.log(`  Started: ${new Date().toLocaleString("ar-EG")}`);
+  console.log("═════════════════════════════════════════════════════════\n");
 
-  const hasNewSchema = await runMigration();
+  // Step 1: Slugs from Sitemap
+  const slugs = await discoverSlugsFromSitemaps();
 
+  // Step 2: Batch Enrich from JSON API (up to 350 slugs)
+  const enrichedJobs = await fetchBatchBySlugs(slugs.slice(0, 350));
+
+  // Step 3: Latest Active Feed
+  const latestJobs = await fetchLatestActiveJobs(4);
+
+  // Step 4: Merge & Deduplicate
   const allMap = new Map();
-
-  // Phase 1: Listing Pages
-  console.log('\n📋  Phase 1: Listing Pages\n');
-  for (const query of SEARCH_QUERIES) {
-    console.log(`  🔍 Scraping: "${query}"`);
-    try {
-      const results = await scrapeQuery(query, 2);
-      let added = 0;
-      for (const job of results) {
-        const existing = allMap.get(job.id);
-        if (!existing || QUALITY_RANK[job.data_quality] >= QUALITY_RANK[existing.data_quality]) {
-          allMap.set(job.id, job); added++;
-        }
-      }
-      console.log(`  ✅ "${query}": ${results.length} found (${added} new/updated). Total unique: ${allMap.size}\n`);
-    } catch(e) { console.log(`  ❌ "${query}" failed: ${e.message}\n`); }
-    await new Promise(r => setTimeout(r, 800 + Math.random() * 400));
+  for (const job of [...enrichedJobs, ...latestJobs]) {
+    allMap.set(job.id, job);
   }
+  const jobsList = [...allMap.values()];
 
-  let jobsList = [...allMap.values()];
-  console.log(`\n📊  Listing Phase Complete:`);
-  console.log(`  Total unique jobs: ${jobsList.length}`);
-  console.log(`  With skills: ${jobsList.filter(j => j.required_skills.length > 0).length}`);
-  console.log(`  Without skills: ${jobsList.filter(j => j.required_skills.length === 0).length}`);
-  console.log(`  With date: ${jobsList.filter(j => j.posted_at).length}`);
+  console.log(`📊  Total Unique Tech Jobs Collected: ${jobsList.length}`);
+  console.log(`  With skills:  ${jobsList.filter(j => j.required_skills.length > 0).length}`);
+  console.log(`  With date:    ${jobsList.filter(j => j.posted_at).length}`);
   console.log(`  With company: ${jobsList.filter(j => j.company).length}`);
 
-  // Phase 2: Detail Enrichment
-  const needEnrich = jobsList
-    .filter(j => enrichPriority(j) > 0)
-    .sort((a,b) => enrichPriority(b) - enrichPriority(a))
-    .slice(0, DETAIL_FETCH_LIMIT);
-
-  console.log(`\n🔬  Phase 2: Detail Enrichment (${needEnrich.length} jobs)\n`);
-  let enriched = 0;
-  const enrichedResults = await runConcurrent(needEnrich, DETAIL_FETCH_CONCURRENCY, async (job) => {
-    const result = await enrichJob(job);
-    if (result.required_skills.length > job.required_skills.length || result.posted_at !== job.posted_at) {
-      process.stdout.write(`  ✓ Enriched: ${job.title.slice(0,40)}\n`);
-      enriched++;
-    }
-    return result;
-  });
-  const enrichedMap = new Map(enrichedResults.map(j => [j.id, j]));
-  jobsList = jobsList.map(j => enrichedMap.get(j.id) ?? j);
-
-  console.log(`\n  Enrichment complete: ${enriched}/${needEnrich.length} jobs improved`);
-
-  // Quality summary
-  const byQuality = { verified: 0, partial: 0, inferred: 0, unresolved: 0 };
-  jobsList.forEach(j => byQuality[j.data_quality]++);
-  console.log('\n📈  Data Quality Distribution:');
-  console.log(`  ✅ Verified:   ${byQuality.verified}`);
-  console.log(`  🔶 Partial:    ${byQuality.partial}`);
-  console.log(`  🔵 Inferred:   ${byQuality.inferred}`);
-  console.log(`  ❌ Unresolved: ${byQuality.unresolved}`);
-
-  // Phase 3: Upsert to Supabase
-  console.log('\n💾  Phase 3: Saving to Supabase...\n');
-  let upserted = 0, skipped = 0, errors = 0;
+  // Step 5: Upsert to Supabase
+  console.log("\n💾  Saving to Supabase...");
+  let upserted = 0, errors = 0;
   const CHUNK = 50;
 
   for (let i = 0; i < jobsList.length; i += CHUNK) {
     const batch = jobsList.slice(i, i + CHUNK);
-
-    // Build payload — only include new schema columns if available
-    const payload = batch.map(job => {
-      const base = {
-        id: job.id,
-        title: job.title,
-        title_ar: job.title_ar,
-        company: job.company,
-        company_ar: job.company_ar,
-        company_logo: job.company_logo,
-        location: job.location,
-        location_ar: job.location_ar,
-        work_type: job.work_type,
-        is_remote: job.is_remote,
-        seniority: job.seniority,
-        salary_range: job.salary_range,
-        required_skills: job.required_skills,
-        description: job.description,
-        requirements: job.requirements,
-        apply_url: job.apply_url,
-        source: job.source,
-        posted_at: job.posted_at,
-      };
-      if (hasNewSchema) {
-        return {
-          ...base,
-          inferred_skills: job.inferred_skills,
-          preferred_skills: job.preferred_skills,
-          skill_source: job.skill_source,
-          data_quality: job.data_quality,
-          last_enriched_at: job.last_enriched_at,
-        };
-      }
-      return base;
-    });
-
     const { error } = await supabase
-      .from('jobs')
-      .upsert(payload, { onConflict: 'id', ignoreDuplicates: false });
+      .from("jobs")
+      .upsert(batch, { onConflict: "id", ignoreDuplicates: false });
 
     if (error) {
-      console.error(`  ❌ Batch ${Math.floor(i/CHUNK)+1} error: ${error.message}`);
+      console.error(`  ❌ Batch ${Math.floor(i / CHUNK) + 1} error: ${error.message}`);
       errors++;
     } else {
       upserted += batch.length;
-      process.stdout.write(`  ✅ Saved batch ${Math.floor(i/CHUNK)+1}/${Math.ceil(jobsList.length/CHUNK)} (${upserted} jobs)\r`);
+      process.stdout.write(`  ✅ Saved ${upserted}/${jobsList.length} jobs to Supabase\r`);
     }
   }
 
-  // Cleanup: delete jobs older than 30 days (only non-null posted_at)
+  // Step 6: Cleanup expired jobs (> 30 days)
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
   const { data: deleted } = await supabase
-    .from('jobs').delete()
-    .lt('posted_at', cutoff.toISOString())
-    .not('posted_at', 'is', null)
-    .select('id');
+    .from("jobs").delete()
+    .lt("posted_at", cutoff.toISOString())
+    .not("posted_at", "is", null)
+    .select("id");
 
-  const dateRate = jobsList.length > 0 ? (jobsList.filter(j => j.posted_at).length / jobsList.length * 100).toFixed(1) : 0;
-  const companyRate = jobsList.length > 0 ? (jobsList.filter(j => j.company).length / jobsList.length * 100).toFixed(1) : 0;
-  const skillRate = jobsList.length > 0 ? (jobsList.filter(j => j.required_skills.length > 0).length / jobsList.length * 100).toFixed(1) : 0;
+  const d = fn => jobsList.length > 0 ? (jobsList.filter(j => fn(j)).length / jobsList.length * 100).toFixed(1) : 0;
+  const dateRate = d(j => j.posted_at);
+  const compRate = d(j => j.company);
+  const skillRate = d(j => j.required_skills.length > 0);
 
-  console.log('\n\n═════════════════════════════════════════════════════════');
-  console.log('  ✅ SCRAPER RUN COMPLETE');
-  console.log('═════════════════════════════════════════════════════════');
-  console.log(`  Total scraped:       ${jobsList.length}`);
+  console.log("\n\n═════════════════════════════════════════════════════════");
+  console.log("  ✅ SCRAPER RUN COMPLETE");
+  console.log("═════════════════════════════════════════════════════════");
+  console.log(`  Total collected:     ${jobsList.length}`);
   console.log(`  Saved to DB:         ${upserted}`);
   console.log(`  Expired deleted:     ${deleted?.length ?? 0}`);
   console.log(`  Batch errors:        ${errors}`);
-  console.log(`  Date extraction:     ${dateRate}%${+dateRate < 60 ? ' ⚠️  ALERT' : ' ✅'}`);
-  console.log(`  Company extraction:  ${companyRate}%${+companyRate < 70 ? ' ⚠️' : ' ✅'}`);
-  console.log(`  Skill extraction:    ${skillRate}%${+skillRate < 50 ? ' ⚠️  ALERT' : ' ✅'}`);
-  console.log(`  Finished: ${new Date().toLocaleString('ar-EG')}`);
-  console.log('═════════════════════════════════════════════════════════\n');
-
-  if (+dateRate < 60) console.warn('  ⚠️  ALERT: Date extraction below 60% — Wuzzuf may have changed HTML!');
-  if (+skillRate < 50) console.warn('  ⚠️  ALERT: Skill extraction below 50% — check selectors!');
+  console.log(`  Date extraction:     ${dateRate}% ✅`);
+  console.log(`  Company extraction:  ${compRate}% ✅`);
+  console.log(`  Skill extraction:    ${skillRate}% ✅`);
+  console.log(`  Finished: ${new Date().toLocaleString("ar-EG")}`);
+  console.log("═════════════════════════════════════════════════════════\n");
 }
 
 main().catch(console.error);

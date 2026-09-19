@@ -27,6 +27,7 @@ import { downloadFile } from '@/utils/marketData';
 import { AppShell } from '@/components/layout/AppShell';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ActiveCVBadge } from '@/components/cv/CVVersionManager';
+import { useCV } from '@/contexts/CVContext';
 
 const arabicEmptyPrompts = [
   {
@@ -78,6 +79,7 @@ export default function CopilotPage() {
   } = useChat();
   const { user } = useAuth();
   const { isAr } = useLanguage();
+  const { activeVersion } = useCV();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useClickOutside<HTMLDivElement>(menuOpen, () => setMenuOpen(false));
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -88,22 +90,60 @@ export default function CopilotPage() {
     role?: string;
     skillsCount: number;
     atsScore?: number;
+    cvName?: string;
   }>({ hasCv: false, skillsCount: 0 });
 
   useEffect(() => {
+    // 1. Try from activeVersion in CVContext
+    if (activeVersion && (activeVersion.cvData?.skills?.length || activeVersion.cvData?.experience?.length || activeVersion.name)) {
+      const sCount = activeVersion.cvData.skills.reduce((acc, g) => acc + (Array.isArray(g.skills) ? g.skills.length : 0), 0);
+      setActiveCvStats({
+        hasCv: true,
+        role: activeVersion.targetRole || activeVersion.cvData.contact.jobTitle || '',
+        skillsCount: sCount,
+        atsScore: (activeVersion as any).analysis?.score ?? undefined,
+        cvName: activeVersion.name,
+      });
+      return;
+    }
+
+    // 2. Fallback to 3watly_parsed_cv in localStorage
     try {
       const raw = localStorage.getItem('3watly_parsed_cv');
       if (raw) {
         const p = JSON.parse(raw);
-        setActiveCvStats({
-          hasCv: true,
-          role: p.targetRole || p.currentTitle || 'Data Analyst',
-          skillsCount: Array.isArray(p.skills) ? p.skills.length : 0,
-          atsScore: p.atsReport?.score,
-        });
+        const sCount = Array.isArray(p.skills) ? p.skills.length : 0;
+        if (sCount > 0 || p.targetRole || p.fullName) {
+          setActiveCvStats({
+            hasCv: true,
+            role: p.targetRole || p.currentTitle || '',
+            skillsCount: sCount,
+            atsScore: p.atsReport?.score ?? undefined,
+            cvName: p.filename || (isAr ? 'السيرة الذاتية الأساسية' : 'Primary Resume'),
+          });
+          return;
+        }
+      }
+
+      // 3. Fallback to 3watly_cv_versions
+      const versRaw = localStorage.getItem('3watly_cv_versions');
+      if (versRaw) {
+        const vers = JSON.parse(versRaw);
+        if (Array.isArray(vers) && vers.length > 0) {
+          const v = vers[0];
+          const sCount = v.cvData?.skills?.reduce((acc: number, g: any) => acc + (Array.isArray(g.skills) ? g.skills.length : 0), 0) || 0;
+          setActiveCvStats({
+            hasCv: true,
+            role: v.targetRole || v.cvData?.contact?.jobTitle || '',
+            skillsCount: sCount,
+            atsScore: v.analysis?.score ?? undefined,
+            cvName: v.name,
+          });
+          return;
+        }
       }
     } catch {}
-  }, []);
+  }, [activeVersion, isAr]);
 
   // Dedicated scroll helper: locks scroll directly to bottom of container
   const scrollToBottom = React.useCallback((behavior: 'auto' | 'smooth' = 'smooth') => {
@@ -221,14 +261,14 @@ export default function CopilotPage() {
                 </h2>
                 <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200/60 dark:border-blue-500/30 px-2 py-0.5 text-[10.5px] font-bold text-blue-700 dark:text-blue-300">
                   <SparklesIcon className="h-3 w-3" />
-                  Gemini 3
+                  {isAr ? "مساعد ذكي" : "AI Assistant"}
                 </span>
                 <ActiveCVBadge pageName={isAr ? "المساعد الذكي" : "Copilot"} />
               </div>
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11.5px] text-slate-500 dark:text-slate-400">
                 <span className="flex items-center gap-1">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                  {isAr ? "مبني على تحليل مئات الوظائف في السوق المصري" : "Grounded in live Egyptian market jobs"}
+                  {isAr ? "المحتوى مُولّد بالذكاء الاصطناعي — يرجى مراجعته" : "AI-generated content — review recommended"}
                 </span>
                 {activeCvStats.role && (
                   <>
@@ -401,7 +441,7 @@ function EmptyState({
               </span>
               <button
                 type="button"
-                onClick={() => router.push('/onboarding/upload-cv')}
+                onClick={() => router.push('/onboarding/cv-upload')}
                 className="inline-flex items-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 px-3 py-1 text-[11.5px] font-semibold text-white transition-colors cursor-pointer"
               >
                 <UploadIcon className="h-3 w-3" />

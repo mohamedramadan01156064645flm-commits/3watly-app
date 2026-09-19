@@ -1,127 +1,267 @@
-"use client";
+'use client';
 
-import React from 'react';
-import { Briefcase, Check, TrendingUp, MapPin } from 'lucide-react';
-import { Modal } from '../ui/Modal';
-import { ROLES } from '../../data/skillCatalog';
-import { useSkillPlan } from '../../contexts/SkillPlanContext';
-import { useLanguage } from '../../contexts/LanguageContext';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronLeftIcon, ChevronRightIcon, SparklesIcon, TargetIcon, XIcon } from 'lucide-react';
+import { useSkillPlan } from '@/contexts/SkillPlanContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { TARGET_ROLES } from '@/data/rolesData';
+import { TargetRoleCard } from './TargetRoleCard';
+import { TargetRoleDetailPanel } from './TargetRoleDetailPanel';
+import { CarouselDots } from './CarouselDots';
 
-interface TargetRoleModalProps {
-  open: boolean;
-  onClose: () => void;
+// ─── Card dimensions ──────────────────────────────────────────────────────────
+// Active card: 200×230, idle cards: 162×195, gap 14
+// Carousel track height = 230 + 28 (breathing) = 258
+const A_W = 200; const A_H = 230;
+const I_W = 162; const I_H = 195;
+const GAP = 14;
+const TRACK_H = A_H + 28;
+
+const SPAN = 3;
+
+const DEPTH = [
+  { rotate: 0,  z: 0,    scale: 1,     opacity: 1    },
+  { rotate: 9,  z: -55,  scale: 0.97,  opacity: 0.88 },
+  { rotate: 13, z: -115, scale: 0.93,  opacity: 0.6  },
+  { rotate: 16, z: -170, scale: 0.88,  opacity: 0    },
+];
+
+function mod(v: number, n: number) { return ((v % n) + n) % n; }
+
+function slotX(offset: number) {
+  if (offset === 0) return 0;
+  const steps = Math.abs(offset);
+  const dist = A_W / 2 + GAP + I_W / 2 + (steps - 1) * (I_W + GAP);
+  return Math.sign(offset) * dist;
 }
 
-export function TargetRoleModal({ open, onClose }: TargetRoleModalProps) {
-  const { roleId, setRoleId, readinessFor } = useSkillPlan();
+// ─── Modal ────────────────────────────────────────────────────────────────────
+export function TargetRoleModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { roleId, setRoleId } = useSkillPlan();
   const { isAr } = useLanguage();
+  const touchX = useRef<number | null>(null);
+  const [pos, setPos] = useState(0);
+
+  useEffect(() => {
+    if (open) {
+      const i = TARGET_ROLES.findIndex(r => r.id === roleId);
+      setPos(i >= 0 ? i : 0);
+    }
+  }, [open, roleId]);
+
+  const labels     = useMemo(() => TARGET_ROLES.map(r => r.title), []);
+  const activeIdx  = mod(pos, TARGET_ROLES.length);
+  const activeRole = TARGET_ROLES[activeIdx];
+
+  const step = useCallback((d: number) => setPos(p => p + d), []);
+  const goTo = useCallback((idx: number) => {
+    setPos(p => {
+      const half = TARGET_ROLES.length / 2;
+      let delta = idx - mod(p, TARGET_ROLES.length);
+      if (delta > half) delta -= TARGET_ROLES.length;
+      if (delta < -half) delta += TARGET_ROLES.length;
+      return p + delta;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowRight') { e.preventDefault(); step(isAr ? -1 : 1); }
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); step(isAr ? 1 : -1); }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [open, isAr, step, onClose]);
+
+  const slots = useMemo(() => {
+    const out: { key: number; offset: number; roleIndex: number }[] = [];
+    for (let o = -SPAN; o <= SPAN; o++)
+      out.push({ key: pos + o, offset: o, roleIndex: mod(pos + o, TARGET_ROLES.length) });
+    return out;
+  }, [pos]);
+
+  const confirm = () => { setRoleId(activeRole.id); onClose(); };
+
+  if (!open) return null;
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      maxWidth="max-w-2xl"
-      title={isAr ? 'اختر المسمى الوظيفي المستهدف' : 'Change your target role'}
-      description={
-        isAr
-          ? 'يتم إعادة حساب فجواتك وأولوياتك والوظائف المطابقة لك بناءً على المسمى الذي تختاره.'
-          : 'Your gaps, priorities and matching jobs are recalculated from the role you pick.'
-      }
-    >
-      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {ROLES.map((role) => {
-          const readiness = readinessFor(role.id);
-          const selected = role.id === roleId;
-          const displayName = isAr ? (role.nameAr ?? role.name) : role.name;
-          const displayBlurb = isAr ? (role.blurbAr ?? role.blurb) : role.blurb;
-          const displayCity = isAr ? (role.cityAr ?? role.city) : role.city;
+    <>
+      {/* ── Backdrop ───────────────────────────────────── */}
+      <div
+        className="fixed inset-0 z-40 bg-black/72 backdrop-blur-md"
+        onClick={onClose}
+        aria-hidden
+        style={{ animation: 'trm-fade .16s ease' }}
+      />
 
-          return (
-            <li key={role.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleId(role.id);
-                  onClose();
+      {/* ── Dialog box ────────────────────────────────── */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        dir={isAr ? 'rtl' : 'ltr'}
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 pointer-events-none"
+      >
+        <div
+          className="pointer-events-auto relative flex flex-col overflow-hidden rounded-[22px] w-full"
+          style={{
+            maxWidth: 720,
+            // No overflow: height = header(~108px) + carousel(TRACK_H) + dots(32) + detail(~200px) + gaps(~40) ≈ 638px
+            background: 'linear-gradient(160deg, #08091e 0%, #04060f 55%, #060c18 100%)',
+            boxShadow: '0 28px 70px rgba(0,0,0,0.92), 0 0 0 1px rgba(255,255,255,0.09), 0 0 60px rgba(88,28,180,0.18)',
+            animation: 'trm-up .22s cubic-bezier(.22,1,.36,1)',
+          }}
+        >
+          {/* Ambient blobs (contained inside modal) */}
+          <div aria-hidden className="pointer-events-none absolute -left-20 -top-20 h-52 w-60 rounded-full"
+            style={{ background: 'radial-gradient(closest-side,rgba(88,28,180,.42),transparent)' }} />
+          <div aria-hidden className="pointer-events-none absolute right-0 -top-10 h-36 w-48 rounded-full"
+            style={{ background: 'radial-gradient(closest-side,rgba(38,64,190,.28),transparent)' }} />
+          <div aria-hidden className="pointer-events-none absolute right-4 top-4 h-10 w-18 opacity-25"
+            style={{ backgroundImage: 'radial-gradient(rgba(150,132,255,.6) 1.1px,transparent 1.1px)', backgroundSize: '9px 9px' }} />
+
+          {/* Close */}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="إغلاق"
+            className="absolute top-3 right-3 z-20 grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-white/[0.07] text-slate-300 outline-none transition-colors hover:bg-white/[0.14] hover:text-white cursor-pointer"
+            style={{ boxShadow: '0 4px 12px rgba(0,0,0,.5)' }}
+          >
+            <XIcon className="h-4 w-4" strokeWidth={2.5} />
+          </button>
+
+          {/* ── Header ─────────────────────────────────── */}
+          <div className="relative shrink-0 px-6 pt-5 pb-3 text-center">
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
+              <span
+                className="relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-[12px]"
+                style={{
+                  backgroundImage: 'linear-gradient(145deg,#A78BFA 0%,#6D28D9 48%,#2563EB 100%)',
+                  boxShadow: '0 8px 20px rgba(109,40,217,.55),inset 0 2px 0 rgba(255,255,255,.28)',
                 }}
-                aria-pressed={selected}
-                className={`group relative flex h-full w-full flex-col gap-3 rounded-2xl border p-5 text-start transition-all duration-150 cursor-pointer ${
-                  selected
-                    ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-950/30 dark:border-blue-500/70 ring-2 ring-blue-500/20'
-                    : 'border-slate-200/90 dark:border-white/10 bg-white dark:bg-[#0B1120] hover:border-blue-400/70 dark:hover:border-blue-500/40 hover:bg-blue-50/30 dark:hover:bg-blue-950/10'
-                }`}
               >
-                {/* Header Row */}
-                <div className="flex items-start justify-between gap-3">
-                  <span className="text-[14px] font-bold text-slate-900 dark:text-white leading-tight">
-                    {displayName}
-                  </span>
-                  {selected && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-2.5 py-0.5 text-[10px] font-bold text-white shrink-0">
-                      <Check className="h-3 w-3" />
-                      {isAr ? 'الحالي' : 'Current'}
-                    </span>
-                  )}
-                </div>
+                <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-1/2"
+                  style={{ backgroundImage: 'linear-gradient(180deg,rgba(255,255,255,.26),transparent)' }} />
+                <TargetIcon aria-hidden className="relative h-5 w-5 text-white" strokeWidth={2} />
+              </span>
 
-                {/* Description */}
-                <p className="text-[12.5px] leading-relaxed text-slate-500 dark:text-slate-400">
-                  {displayBlurb}
-                </p>
+              <h2 className="text-[18px] font-extrabold text-white sm:text-[21px]">
+                أكثر المسمى الوظيفي{' '}
+                <span className="bg-clip-text text-transparent"
+                  style={{ backgroundImage: 'linear-gradient(90deg,#C084FC 0%,#F472B6 100%)' }}>
+                  المستهدف
+                </span>
+              </h2>
 
-                {/* Stats Row */}
-                <div className="flex flex-wrap items-center gap-3 text-[12px]">
-                  <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
-                    <TrendingUp className="h-3.5 w-3.5" />
-                    YoY +{role.yoyGrowth}%
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400 font-medium">
-                    <Briefcase className="h-3.5 w-3.5" />
-                    {role.openJobs.toLocaleString('en-US')} {isAr ? 'وظيفة' : 'jobs'}
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400 font-medium">
-                    <MapPin className="h-3 w-3" />
-                    {displayCity}
-                  </span>
-                </div>
+              <SparklesIcon aria-hidden className="h-4 w-4 text-[#93C5FD]"
+                strokeWidth={2} fill="currentColor" fillOpacity={.25} />
+            </div>
 
-                {/* Readiness Progress */}
-                <div className="w-full">
-                  <div className="flex items-center justify-between text-[11px] font-semibold mb-1.5">
-                    <span className="text-slate-500 dark:text-slate-400">
-                      {isAr ? 'جاهزيتك لهذا المسمى' : 'Your readiness'}
-                    </span>
-                    <span className={`tabular-nums font-black ${
-                      readiness >= 70 ? 'text-emerald-600 dark:text-emerald-400' :
-                      readiness >= 40 ? 'text-amber-600 dark:text-amber-400' :
-                      'text-rose-600 dark:text-rose-400'
-                    }`}>
-                      {readiness}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
-                    <div
-                      className={`h-full rounded-full transition-[width] duration-500 ${
-                        readiness >= 70 ? 'bg-emerald-500' :
-                        readiness >= 40 ? 'bg-amber-500' :
-                        'bg-blue-600'
-                      }`}
-                      style={{ width: `${readiness}%` }}
+            <p className="mt-1.5 text-[12px] text-slate-400">
+              يتم إعادة حساب مهاراتك والوظائف المطابقة لك بناءً على المسمى الذي تختاره.
+            </p>
+
+            <div className="mt-3 h-px"
+              style={{ background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent)' }} />
+          </div>
+
+          {/* ── Carousel ──────────────────────────────── */}
+          <div
+            className="relative shrink-0 px-10 sm:px-12"
+            role="group"
+            aria-roledescription="carousel"
+          >
+            {/* Arrows */}
+            <button type="button" onClick={() => step(-1)} aria-label="السابق"
+              className="absolute left-1 top-1/2 z-[60] -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full border border-white/12 bg-white/[0.07] text-slate-300 outline-none transition-colors hover:bg-white/[0.14] hover:text-white active:scale-95 cursor-pointer"
+              style={{ boxShadow: '0 6px 18px rgba(0,0,0,.55)' }}>
+              <ChevronLeftIcon className="h-4 w-4" strokeWidth={2.3} />
+            </button>
+            <button type="button" onClick={() => step(1)} aria-label="التالي"
+              className="absolute right-1 top-1/2 z-[60] -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full border border-white/12 bg-white/[0.07] text-slate-300 outline-none transition-colors hover:bg-white/[0.14] hover:text-white active:scale-95 cursor-pointer"
+              style={{ boxShadow: '0 6px 18px rgba(0,0,0,.55)' }}>
+              <ChevronRightIcon className="h-4 w-4" strokeWidth={2.3} />
+            </button>
+
+            {/* 3D track */}
+            <div
+              className="relative overflow-hidden"
+              style={{ height: TRACK_H, perspective: '1200px', perspectiveOrigin: '50% 50%' }}
+              onTouchStart={e => { touchX.current = e.touches[0].clientX; }}
+              onTouchEnd={e => {
+                if (touchX.current === null) return;
+                const d = e.changedTouches[0].clientX - touchX.current;
+                if (Math.abs(d) > 40) step(d < 0 ? 1 : -1);
+                touchX.current = null;
+              }}
+            >
+              {slots.map(({ key, offset, roleIndex }) => {
+                const dist = Math.min(Math.abs(offset), DEPTH.length - 1);
+                const dep  = DEPTH[dist];
+                const dir  = Math.sign(offset);
+                const isAct = offset === 0;
+                const role  = TARGET_ROLES[roleIndex];
+                return (
+                  <div
+                    key={key}
+                    className="absolute left-1/2 top-1/2"
+                    style={{
+                      transformOrigin: 'center center',
+                      transform: `translate(-50%,-50%) translateX(${slotX(offset)}px) translateZ(${dep.z}px) rotateY(${-dir * dep.rotate}deg) scale(${dep.scale})`,
+                      opacity: dep.opacity,
+                      pointerEvents: dep.opacity === 0 ? 'none' : 'auto',
+                      zIndex: 40 - dist,
+                      willChange: 'transform,opacity',
+                      transition: 'transform 420ms cubic-bezier(.22,1,.36,1),opacity 420ms cubic-bezier(.22,1,.36,1)',
+                    }}
+                  >
+                    <TargetRoleCard
+                      role={role}
+                      isActive={isAct}
+                      width={isAct ? A_W : I_W}
+                      height={isAct ? A_H : I_H}
+                      onSelect={() => step(offset)}
                     />
                   </div>
-                </div>
+                );
+              })}
 
-                {/* Salary + Time to hire footer */}
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                  {isAr
-                    ? `متوسط الراتب: ${role.salaryEgpK} ألف ج.م · متوسط التوظيف: ${role.timeToHireDays} يوماً`
-                    : `EGP ${role.salaryEgpK}K avg · ${role.timeToHireDays} days to hire`}
-                </p>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </Modal>
+              {/* Edge fade masks */}
+              <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 z-[45] w-10"
+                style={{ backgroundImage: 'linear-gradient(90deg,#04060f,transparent)' }} />
+              <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-[45] w-10"
+                style={{ backgroundImage: 'linear-gradient(270deg,#04060f,transparent)' }} />
+            </div>
+          </div>
+
+          {/* ── Dots ──────────────────────────────────── */}
+          <CarouselDots
+            labels={labels}
+            activeIndex={activeIdx}
+            onSelect={goTo}
+            className="mt-2 justify-center shrink-0"
+            size="sm"
+          />
+
+          {/* ── Detail panel ──────────────────────────── */}
+          <div className="shrink-0 px-4 sm:px-5 pb-5 pt-3">
+            <TargetRoleDetailPanel
+              role={activeRole}
+              labels={labels}
+              activeIndex={activeIdx}
+              onSelect={goTo}
+              onConfirm={confirm}
+            />
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes trm-fade { from{opacity:0} to{opacity:1} }
+        @keyframes trm-up   { from{opacity:0;transform:translateY(16px) scale(.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+      `}</style>
+    </>
   );
 }

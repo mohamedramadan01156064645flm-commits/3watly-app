@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+const SAFE_NEXT_PATH_REGEX = /^\/(?!\/)[A-Za-z0-9\-_/]*$/;
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
@@ -20,47 +25,46 @@ export async function GET(request: Request) {
           (user.email ? user.email.split('@')[0] : 'User');
         const avatarUrl = metadata.avatar_url || metadata.picture || null;
 
-        // Query profiles table in Supabase
+        // Query/Upsert profiles table in Supabase
         let onboardingCompleted = false;
         try {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('*')
+            .select('onboarding_completed')
             .eq('id', user.id)
             .maybeSingle();
 
           if (profile) {
-            // Existing user: Preserve existing profile data and check onboarding
             onboardingCompleted = profile.onboarding_completed === true;
           } else {
-            // First time user: Create initial profile record with Google / OAuth metadata
-            await supabase.from('profiles').insert({
-              id: user.id,
-              full_name: fullName,
-              avatar_url: avatarUrl,
-              onboarding_completed: false,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
+            await supabase.from('profiles').upsert(
+              {
+                id: user.id,
+                full_name: fullName,
+                avatar_url: avatarUrl,
+                onboarding_completed: false,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'id' }
+            );
             onboardingCompleted = false;
           }
         } catch (dbErr) {
-          console.warn('Profiles table query fallback:', dbErr);
+          console.warn('Profiles table sync notice:', dbErr);
           onboardingCompleted = metadata.onboarding_completed === true;
         }
 
-        // Determine destination: Dashboard for returning users, Onboarding for first-time users
-        const target = requestedNext
-          ? requestedNext
-          : onboardingCompleted
-          ? '/dashboard'
-          : '/onboarding/career-path';
+        // Validate destination to prevent open-redirect attacks
+        let target = onboardingCompleted ? '/dashboard' : '/onboarding/career-path';
+        if (requestedNext && SAFE_NEXT_PATH_REGEX.test(requestedNext)) {
+          target = requestedNext;
+        }
 
-        return NextResponse.redirect(`${origin}${target}`);
+        return NextResponse.redirect(new URL(target, origin));
       }
     }
   }
 
   // Fallback to login with error notification
-  return NextResponse.redirect(`${origin}/login?error=oauth_exchange_failed`);
+  return NextResponse.redirect(new URL('/login?error=oauth_exchange_failed', origin));
 }

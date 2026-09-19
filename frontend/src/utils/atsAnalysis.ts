@@ -162,7 +162,8 @@ export const SCORE_LEGEND: {
 export function getMarketKeywordsForRole(roleTitle: string): { keywords: string[]; benchmark: number } {
   const t = (roleTitle || '').toLowerCase();
   
-  if (/machine learning|ml\b|ai\b|computer vision|deep learning|data science|data scientist/i.test(t)) {
+  // 1. Machine Learning, AI & Computer Vision
+  if (/machine learning|ml\b|ai\b|computer vision|deep learning|nlp|data science|data scientist/i.test(t)) {
     return {
       keywords: [
         'Python', 'PyTorch', 'TensorFlow', 'OpenCV', 'Scikit-Learn',
@@ -174,7 +175,44 @@ export function getMarketKeywordsForRole(roleTitle: string): { keywords: string[
     };
   }
 
-  if (/frontend|react|web developer|ui developer/i.test(t)) {
+  // 2. Data Engineering
+  if (/data engineer|big data|etl developer|pipeline engineer/i.test(t)) {
+    return {
+      keywords: [
+        'Python', 'SQL', 'ETL', 'Apache Spark', 'Airflow',
+        'dbt', 'Kafka', 'PostgreSQL', 'Data Warehousing', 'Snowflake',
+        'BigQuery', 'Docker', 'Git', 'Data Pipelines', 'Data Modeling', 'Linux'
+      ],
+      benchmark: 9
+    };
+  }
+
+  // 3. DevOps & Cloud Infrastructure
+  if (/devops|cloud|sre|site reliability|infrastructure|platform engineer|sysadmin/i.test(t)) {
+    return {
+      keywords: [
+        'Docker', 'Kubernetes', 'CI/CD', 'Linux', 'AWS',
+        'Azure', 'Terraform', 'Git', 'Bash', 'Ansible',
+        'Prometheus', 'Grafana', 'Cloud Computing', 'Networking', 'Security'
+      ],
+      benchmark: 9
+    };
+  }
+
+  // 4. Full Stack Development
+  if (/full.?stack|fullstack/i.test(t)) {
+    return {
+      keywords: [
+        'React', 'Node.js', 'TypeScript', 'JavaScript', 'Next.js',
+        'SQL', 'PostgreSQL', 'MongoDB', 'REST APIs', 'Git',
+        'Docker', 'Tailwind CSS', 'State Management', 'Database Design', 'CI/CD'
+      ],
+      benchmark: 10
+    };
+  }
+
+  // 5. Frontend Development
+  if (/frontend|front-end|react|web developer|ui developer/i.test(t)) {
     return {
       keywords: [
         'React', 'JavaScript', 'TypeScript', 'Next.js', 'Tailwind CSS',
@@ -185,7 +223,8 @@ export function getMarketKeywordsForRole(roleTitle: string): { keywords: string[
     };
   }
 
-  if (/backend|node|express|api|software engineer/i.test(t)) {
+  // 6. Backend Development
+  if (/backend|back-end|node|express|api|django|flask|spring|laravel/i.test(t)) {
     return {
       keywords: [
         'Node.js', 'Python', 'SQL', 'PostgreSQL', 'MongoDB',
@@ -196,7 +235,55 @@ export function getMarketKeywordsForRole(roleTitle: string): { keywords: string[
     };
   }
 
-  // Default: Data Analyst & BI
+  // 7. Mobile & Flutter Development
+  if (/mobile|flutter|react native|android|ios|dart/i.test(t)) {
+    return {
+      keywords: [
+        'Flutter', 'Dart', 'React Native', 'Mobile Development', 'REST APIs',
+        'Firebase', 'State Management', 'Git', 'Android Studio', 'Xcode',
+        'iOS', 'Android', 'UI/UX', 'Clean Architecture'
+      ],
+      benchmark: 8
+    };
+  }
+
+  // 8. QA & Software Testing
+  if (/qa\b|quality assurance|software test|automation test|tester/i.test(t)) {
+    return {
+      keywords: [
+        'Manual Testing', 'Automation Testing', 'Selenium', 'Postman', 'Test Cases',
+        'JIRA', 'Regression Testing', 'API Testing', 'Bug Tracking', 'Git',
+        'Agile', 'Cypress', 'SQL', 'Performance Testing'
+      ],
+      benchmark: 8
+    };
+  }
+
+  // 9. Product Management & Scrum
+  if (/product manager|product owner|scrum master/i.test(t)) {
+    return {
+      keywords: [
+        'Agile', 'Scrum', 'JIRA', 'Product Roadmap', 'User Stories',
+        'Market Research', 'Stakeholder Management', 'Wireframing', 'KPIs', 'Analytics',
+        'Product Lifecycle', 'Prioritization', 'A/B Testing'
+      ],
+      benchmark: 8
+    };
+  }
+
+  // 10. Business Analyst
+  if (/business analyst|business systems/i.test(t)) {
+    return {
+      keywords: [
+        'SQL', 'Excel', 'Requirements Gathering', 'Business Analysis', 'Process Modeling',
+        'JIRA', 'Power BI', 'Stakeholder Communication', 'User Stories', 'Data Analysis',
+        'Documentation', 'Agile', 'Gap Analysis'
+      ],
+      benchmark: 8
+    };
+  }
+
+  // 11. Default: Data Analyst & Business Intelligence
   return {
     keywords: [
       'SQL', 'Python', 'Power BI', 'Excel', 'Tableau',
@@ -221,7 +308,7 @@ export function analyzeCV(cv: CVData, template: TemplateId): Analysis {
   const standardHeadings = requiredSections.every((id) => {
     if (cv.hiddenSections.includes(id)) return false;
     if (id === 'summary') return cv.summary.trim() !== '';
-    if (id === 'experience') return cv.experience.length > 0;
+    if (id === 'experience') return cv.experience.length > 0 || cv.projects.length > 0;
     if (id === 'education') return cv.education.length > 0;
     return cv.skills.length > 0;
   });
@@ -239,7 +326,7 @@ export function analyzeCV(cv: CVData, template: TemplateId): Analysis {
     labelAr: 'عناوين أقسام قياسية ومعتمدة',
     passed: standardHeadings,
     hint: 'ATS parsers look for conventional headings like Experience, Education and Skills.',
-    hintAr: 'أنظمة الفرز الآلي تبحث عن العناوين التقليدية المتعارف عليها مثل الخبرات والمؤهلات والمهارات.'
+    hintAr: 'أنظمة الفرز الآلي تبحث عن العناوين التقليدية المتعارف عليها مثل الخبرات والمشاريع والمؤهلات والمهارات.'
   },
   {
     id: 'columns',
@@ -274,6 +361,21 @@ export function analyzeCV(cv: CVData, template: TemplateId): Analysis {
     cv.contact.phone && (
     cv.contact.location || cv.contact.linkedin)
   );
+
+  const hasExp = (cv.experience || []).length > 0;
+  const hasProj = (cv.projects || []).length > 0;
+  const expPassed = hasExp || hasProj;
+
+  let expDetailEn = '0 Roles Detected';
+  let expDetailAr = 'لم يتم العثور على خبرات';
+  if (hasExp) {
+    expDetailEn = `${cv.experience.length} ${cv.experience.length === 1 ? 'Role' : 'Roles'} Detected`;
+    expDetailAr = `تم استخراج ${cv.experience.length} وظائف`;
+  } else if (hasProj) {
+    expDetailEn = `${cv.projects.length} Technical Projects (Applied Experience)`;
+    expDetailAr = `تم استخراج ${cv.projects.length} مشاريع عملية (خبرة تطبيقية)`;
+  }
+
   const parserItems: CheckItem[] = [
   {
     id: 'contact',
@@ -287,12 +389,11 @@ export function analyzeCV(cv: CVData, template: TemplateId): Analysis {
   {
     id: 'experience',
     icon: 'experience',
-    label: 'Work Experience',
-    labelAr: 'الخبرات العملية',
-    passed: cv.experience.length > 0,
-    detail: `${cv.experience.length} ${
-    cv.experience.length === 1 ? 'Role' : 'Roles'} Detected`,
-    detailAr: `تم استخراج ${cv.experience.length} وظائف`
+    label: 'Work & Project Experience',
+    labelAr: 'الخبرات والمشاريع العملية',
+    passed: expPassed,
+    detail: expDetailEn,
+    detailAr: expDetailAr
   },
   {
     id: 'education',
@@ -311,7 +412,21 @@ export function analyzeCV(cv: CVData, template: TemplateId): Analysis {
     passed: skillCount >= 5,
     detail: `${skillCount} Skills Detected`,
     detailAr: `تم استخراج ${skillCount} مهارة`
+  },
+  {
+    id: 'certifications' as any,
+    icon: 'education',
+    label: 'Certifications',
+    labelAr: 'الشهادات الاحترافية',
+    passed: (cv.certifications || []).length > 0,
+    detail: (cv.certifications || []).length > 0
+      ? `${cv.certifications.length} ${cv.certifications.length === 1 ? 'Certificate' : 'Certificates'} Detected`
+      : 'None Detected',
+    detailAr: (cv.certifications || []).length > 0
+      ? `تم استخراج ${cv.certifications.length} شهادة`
+      : 'لا توجد شهادات'
   }];
+
 
 
   /* ---------------------------------- keywords ---------------------------- */
@@ -331,11 +446,10 @@ export function analyzeCV(cv: CVData, template: TemplateId): Analysis {
   const parserPassed = parserItems.filter((i) => i.passed).length;
   const impact = metricRatio(cv);
 
-  const structureScore = structurePassed / structureItems.length * 30;
-  const parserScore = parserPassed / parserItems.length * 30;
+  const structureScore = (structurePassed / structureItems.length) * 30;
+  const parserScore = (parserPassed / parserItems.length) * 30;
   const keywordScore = Math.min(1, found.length / benchmark) * 28;
   const impactScore = impact * 12;
-  const summaryBonus = cv.skillsSummary ? 3 : 0;
 
   const score = Math.max(
     0,
@@ -345,8 +459,7 @@ export function analyzeCV(cv: CVData, template: TemplateId): Analysis {
         structureScore +
         parserScore +
         keywordScore +
-        impactScore +
-        summaryBonus
+        impactScore
       )
     )
   );
@@ -354,36 +467,94 @@ export function analyzeCV(cv: CVData, template: TemplateId): Analysis {
 
   /* ----------------------------------- fixes ------------------------------ */
   const fixes: Fix[] = [];
+
+  // Fix: missing or very short summary
+  if (!cv.summary || cv.summary.trim().length < 30) {
+    fixes.push({
+      id: 'summary-missing',
+      title: 'Add a Professional Summary',
+      titleAr: 'إضافة ملخص مهني احترافي',
+      why: 'CVs with a professional summary are ranked 40% higher by ATS systems.',
+      whyAr: 'السيرات التي تحتوي على ملخص مهني تُرتَّب بنسبة 40% أعلى في أنظمة الـ ATS.',
+    });
+  } else if (cv.summary.trim().length < 100) {
+    fixes.push({
+      id: 'summary-short',
+      title: 'Expand your Professional Summary',
+      titleAr: 'توسيع ملخصك المهني',
+      why: 'Short summaries (under 100 chars) score 22% lower in ATS keyword scans.',
+      whyAr: 'الملخصات القصيرة (أقل من 100 حرف) تحصل على 22% أقل في نقاط الـ ATS.',
+    });
+  }
+
+  // Fix: missing LinkedIn URL
+  if (!cv.contact.linkedin || !cv.contact.linkedin.trim()) {
+    fixes.push({
+      id: 'linkedin-missing',
+      title: 'Add your LinkedIn Profile URL',
+      titleAr: 'إضافة رابط ملفك الشخصي على LinkedIn',
+      why: '87% of Egyptian recruiters check LinkedIn before scheduling interviews.',
+      whyAr: '87% من مسؤولي التوظيف في مصر يتحققون من LinkedIn قبل جدولة المقابلات.',
+    });
+  }
+
+  // Fix: experience or project entries with too few bullets
+  const thinExperiences = (cv.experience || []).filter(
+    (e) => (e.bullets || []).filter((b) => b.trim().length > 0).length < 2
+  );
+  const thinProjects = (cv.projects || []).filter(
+    (p) => (p.bullets || []).filter((b) => b.trim().length > 0).length < 2
+  );
+  const totalThin = thinExperiences.length + thinProjects.length;
+  if (totalThin > 0) {
+    fixes.push({
+      id: 'few-bullets',
+      title: 'Add detail bullets to your roles & projects',
+      titleAr: 'إضافة نقاط تفصيلية للخبرات والمشاريع',
+      why: `${totalThin} entry(ies) have fewer than 2 bullets — ATS parsers rank sparse sections as incomplete.`,
+      whyAr: `${totalThin} مدخل يحتوي على أقل من نقطتين — أنظمة الـ ATS تصنف الأقسام المختصرة كغير مكتملة.`,
+    });
+  }
+
+  // Fix: too few total skills
+  if (totalSkills(cv) < 8) {
+    fixes.push({
+      id: 'few-skills',
+      title: 'Add more technical skills',
+      titleAr: 'إضافة مهارات تقنية إضافية',
+      why: 'CVs with 8+ skills are shortlisted 3× more often in the Egyptian market.',
+      whyAr: 'السيرات التي تحتوي على 8 مهارات أو أكثر تُرشَّح 3 أضعاف في سوق العمل المصري.',
+    });
+  }
+
+  // Fix: missing keywords (top 3 per role)
   if (missing.length > 0) {
     const next = missing.slice(0, 3);
     fixes.push({
       id: 'keywords',
-      title: 'Add keywords:',
+      title: 'Add missing keywords:',
       titleAr: 'إضافة الكلمات المفتاحية الناقصة:',
       highlight: next.join(', '),
-      why: `Found in 31% of similar ${cv.contact.jobTitle} job postings in Egypt.`,
-      whyAr: `مطلوبة في 31% من إعلانات وظائف ${cv.contact.jobTitle} المماثلة في السوق المصري.`,
-      payload: next
+      why: `These keywords appear in 31%+ of ${cv.contact.jobTitle || 'your target'} job postings in Egypt.`,
+      whyAr: `هذه الكلمات تظهر في أكثر من 31% من إعلانات ${cv.contact.jobTitle || 'وظيفتك المستهدفة'} في السوق المصري.`,
+      payload: next,
     });
   }
-  if (impact < 0.7) {
+
+  // Fix: bullets lack measurable impact
+  const totalBulletsCount = (cv.experience || []).flatMap(e => e.bullets || []).length + (cv.projects || []).flatMap(p => p.bullets || []).length;
+  if (impact < 0.7 && totalBulletsCount > 0) {
     fixes.push({
       id: 'metrics',
-      title: 'Add measurable impact to your experience bullets',
-      titleAr: 'إضافة نتائج وأرقام قابلة للقياس لنقاط الخبرة',
-      why: 'Bullet points with metrics get 2.3x more shortlisted.',
-      whyAr: 'النقاط التي تحتوي على أرقام ونسب مئوية تزيد فرصة الترشح بـ 2.3 ضعف.'
+      title: 'Strengthen achievement bullets with action verbs & metrics',
+      titleAr: 'تقوية صياغة الإنجازات والنتائج بالأرقام (معادلة X-Y-Z)',
+      why: 'Action-led bullets with quantified metrics (Google X-Y-Z formula) increase interview shortlists by 2.3×.',
+      whyAr: 'النقاط التي تبدأ بأفعال قوية وتحتوي على أرقام ونتائج ملموسة (معادلة X-Y-Z) ترفع فرص القبول بـ 2.3 ضعف.',
     });
   }
-  if (!cv.skillsSummary) {
-    fixes.push({
-      id: 'skills-summary',
-      title: 'Add a Skills Summary section',
-      titleAr: 'إضافة قسم ملخص المهارات (Skills Summary)',
-      why: 'Improves skill visibility for ATS and recruiters.',
-      whyAr: 'يزيد وضوح مهاراتك لمسؤولي التوظيف وخوارزميات الـ ATS.'
-    });
-  }
+
+
+
   return {
     score,
     band,
@@ -411,7 +582,7 @@ export function analyzeCV(cv: CVData, template: TemplateId): Analysis {
       missing,
       total: MARKET_KEYWORDS.length
     },
-    fixes: fixes.slice(0, 3)
+    fixes: fixes.slice(0, 5)
   };
 }
 

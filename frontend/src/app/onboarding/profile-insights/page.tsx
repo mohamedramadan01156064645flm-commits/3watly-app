@@ -62,8 +62,8 @@ export default function ProfileInsightsPage() {
     : [];
 
   const totalSkillsCount = allExtractedSkills.length;
-  const atsScore = parsedCv.atsReport?.score ?? profile.scores?.overall ?? 85;
-  const skillsScore = Math.min(100, Math.max(40, totalSkillsCount * 6));
+  const atsScore = parsedCv.atsReport?.score ?? (profile.scores?.overall > 0 ? profile.scores.overall : Math.min(100, Math.max(20, totalSkillsCount * 10)));
+  const skillsScore = Math.min(100, Math.max(20, totalSkillsCount * 10));
   
   const expItemsCount = parsedCv.experiences?.length || 0;
   // Use real parsed experienceYears (0 for fresh grads / interns)

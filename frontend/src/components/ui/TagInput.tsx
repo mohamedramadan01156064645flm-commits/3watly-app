@@ -89,7 +89,7 @@ export function TagInput({
                 setAdding(false);
               }
             }}
-            className="h-8 w-44 rounded-xl border border-blue-500 bg-white dark:bg-[#060913] px-3 text-[12.5px] font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="h-8 w-44 rounded-xl border border-blue-500 bg-white dark:bg-[#040816] px-3 text-[12.5px] font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           />
         ) : (
           <button

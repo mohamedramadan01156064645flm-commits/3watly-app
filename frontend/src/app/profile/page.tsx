@@ -57,6 +57,12 @@ export default function ProfilePage() {
   // Bio char count
   const MAX_BIO = 400;
 
+  // Avatar error fallback
+  const [avatarError, setAvatarError] = useState(false);
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.avatarUrl]);
+
   // Load profile data from localStorage + auth context
   const getInitialProfile = () => {
     let cvData: any = null;
@@ -198,9 +204,14 @@ export default function ProfilePage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
               {/* Avatar with camera button */}
               <div className="relative w-28 h-28 shrink-0">
-                <div className="w-full h-full rounded-full overflow-hidden bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-700 text-white font-extrabold text-[32px] flex items-center justify-center ring-4 ring-blue-100 dark:ring-blue-950/50 shadow-lg shadow-blue-500/20">
-                  {user?.avatarUrl ? (
-                    <img src={user.avatarUrl} alt={profile.fullName} className="w-full h-full object-cover" />
+                <div className="w-full h-full rounded-full overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 text-white font-black text-[32px] tracking-wider flex items-center justify-center ring-4 ring-blue-100 dark:ring-blue-950/60 shadow-lg shadow-blue-500/20 select-none">
+                  {user?.avatarUrl && !avatarError ? (
+                    <img 
+                      src={user.avatarUrl} 
+                      alt={profile.fullName} 
+                      className="w-full h-full object-cover"
+                      onError={() => setAvatarError(true)}
+                    />
                   ) : (
                     userInitials
                   )}

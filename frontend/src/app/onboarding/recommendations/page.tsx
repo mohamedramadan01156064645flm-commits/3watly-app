@@ -3,7 +3,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ShieldCheckIcon, Sparkles, ArrowUpRight, CheckCircle2, Rocket, Briefcase, Zap, Star } from 'lucide-react';
+import { ShieldCheckIcon, Sparkles, ArrowUpRight, CheckCircle2, Rocket, Briefcase, Zap, Star, Bookmark } from 'lucide-react';
 import { StepShell } from '@/components/onboarding/StepShell';
 import { RequireOnboarding } from '@/components/onboarding/RequireOnboarding';
 import { StepFooter } from '@/components/onboarding/StepFooter';
@@ -12,12 +12,35 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { riseIn } from '@/utils/motion';
 import { mockJobsList } from '@/data/jobs';
+import { toggleJobBookmark, getSavedJobIds, SAVED_JOBS_EVENT } from '@/utils/jobBookmarks';
+import { toast } from 'sonner';
 
 export default function RecommendationsPage() {
   const router = useRouter();
   const { isAr } = useLanguage();
-  const { profile, parsedCv } = useOnboarding();
-  const { setOnboardingCompleted } = useAuth();
+  const { profile, parsedCv, role } = useOnboarding();
+  const { setOnboardingCompleted, user } = useAuth();
+
+  const [bookmarkedIds, setBookmarkedIds] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    setBookmarkedIds(getSavedJobIds(user?.id));
+    const handleUpdate = () => setBookmarkedIds(getSavedJobIds(user?.id));
+    window.addEventListener(SAVED_JOBS_EVENT, handleUpdate);
+    return () => window.removeEventListener(SAVED_JOBS_EVENT, handleUpdate);
+  }, [user?.id]);
+
+  const handleToggleSave = (job: any, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const result = toggleJobBookmark(job, user?.id);
+    setBookmarkedIds(result.list);
+    if (result.isSaved) {
+      toast.success(isAr ? 'تم حفظ الوظيفة في قائمة الوظائف المحفوظة ⭐' : 'Job saved to your bookmarks ⭐');
+    } else {
+      toast.info(isAr ? 'تمت إزالة الوظيفة من المحفوظات' : 'Job removed from bookmarks');
+    }
+  };
 
   const handleFinish = async () => {
     try {
@@ -34,7 +57,7 @@ export default function RecommendationsPage() {
     );
   }
 
-  const atsScore = parsedCv.atsReport?.score ?? 85;
+  const atsScore = parsedCv.atsReport?.score ?? null;
   const userSkills = (parsedCv.skills || []).map((s: string) => s.toLowerCase());
   const topSkill = parsedCv.skills?.[0] || (isAr ? 'التقنيات الحديثة' : 'Python');
   const secondSkill = parsedCv.skills?.[1] || (isAr ? 'قواعد البيانات' : 'SQL');
@@ -101,20 +124,39 @@ export default function RecommendationsPage() {
   });
 
   const [liveJobs, setLiveJobs] = React.useState<any[]>([]);
+  const [loadingJobs, setLoadingJobs] = React.useState(true);
 
   React.useEffect(() => {
-    fetch('/api/jobs?limit=6')
+    fetch('/api/jobs?limit=20')
       .then((r) => r.json())
       .then((d) => {
-        if (Array.isArray(d?.jobs) && d.jobs.length > 0) {
+        if (Array.isArray(d?.jobs)) {
           setLiveJobs(d.jobs);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoadingJobs(false));
   }, []);
 
-  // Calculate genuine match score for every job based on actual user skills overlap
-  const sourceJobs = liveJobs.length > 0 ? liveJobs : mockJobsList;
+  // Role-to-domain keyword map: only jobs whose title/category matches these keywords
+  const ROLE_DOMAIN_KEYWORDS: Record<string, string[]> = {
+    'data-analyst':       ['data analyst', 'data analysis', 'business intelligence', 'bi analyst', 'analytics', 'power bi', 'tableau', 'sql', 'reporting'],
+    'data-engineer':      ['data engineer', 'data pipeline', 'etl', 'airflow', 'spark', 'big data', 'dbt', 'database'],
+    'software-engineer':  ['software engineer', 'software developer', 'fullstack', 'full stack', 'backend', 'frontend', 'web developer', 'react', 'node'],
+    'ml-engineer':        ['machine learning', 'ml engineer', 'ai engineer', 'data scientist', 'deep learning', 'nlp', 'computer vision'],
+    'devops':             ['devops', 'cloud engineer', 'site reliability', 'sre', 'infrastructure', 'kubernetes', 'ci/cd', 'platform engineer'],
+  };
+
+  const userRoleKeywords = (role ? ROLE_DOMAIN_KEYWORDS[role] : null)
+    ?? Object.values(ROLE_DOMAIN_KEYWORDS).flat();
+
+  const sourceJobs = liveJobs.filter(job => {
+    const titleLower = (job.title || '').toLowerCase();
+    const categoryLower = (job.category || '').toLowerCase();
+    const combined = `${titleLower} ${categoryLower}`;
+    return userRoleKeywords.some(kw => combined.includes(kw));
+  });
+
   const rankedJobs = sourceJobs.map(job => {
     const rawSkills = Array.isArray(job.matchedSkills) 
       ? job.matchedSkills.map((s: any) => (typeof s === 'string' ? s : s.name).toLowerCase())
@@ -123,15 +165,18 @@ export default function RecommendationsPage() {
       userSkills.some(us => us.includes(rs) || rs.includes(us))
     ).length;
 
-    const overlapRatio = rawSkills.length > 0 ? matchedCount / rawSkills.length : 0.8;
-    const calculatedMatch = Math.min(98, Math.max(72, Math.round(atsScore * 0.6 + overlapRatio * 40)));
+    const overlapRatio = rawSkills.length > 0 ? matchedCount / rawSkills.length : 0;
+    const baseScore = atsScore ? atsScore * 0.4 : 30;
+    const calculatedMatch = Math.min(98, Math.round(baseScore + overlapRatio * 60));
 
     return {
       ...job,
       calculatedMatch,
       matchedCount
     };
-  }).sort((a, b) => b.calculatedMatch - a.calculatedMatch || b.matchedCount - a.matchedCount);
+  })
+  .filter(job => job.calculatedMatch >= 45) // Only show jobs with meaningful match
+  .sort((a, b) => b.calculatedMatch - a.calculatedMatch || b.matchedCount - a.matchedCount);
 
   const displayJobs = rankedJobs.slice(0, 2);
 
@@ -202,30 +247,58 @@ export default function RecommendationsPage() {
                 <span>{isAr ? "وظائف جاهزة ومطابقة لملفك حالياً" : "Top Matched Roles Ready For You"}</span>
               </h2>
               <span className="text-[12px] font-bold text-blue-600 dark:text-blue-400">
-                {isAr ? `+${rankedJobs.length} فرصة نشطة` : `+${rankedJobs.length} active roles`}
+                {isAr ? `${rankedJobs.length} فرصة نشطة` : `${rankedJobs.length} active roles`}
               </span>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-              {displayJobs.map((job) => (
-                <div 
-                  key={job.id} 
-                  className="flex items-center justify-between rounded-2xl border border-slate-200/70 dark:border-white/5 bg-white dark:bg-[#0D1527] p-4 shadow-sm hover:border-blue-400/50 transition-all"
-                >
-                  <div>
-                    <h4 className="text-[14px] font-bold text-slate-900 dark:text-white leading-tight">
-                      {isAr ? job.titleAr : job.title}
-                    </h4>
-                    <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      {isAr ? job.companyAr : job.company} • {isAr ? job.locationAr : job.location}
-                    </p>
-                  </div>
-                  <span className="rounded-xl bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-400 font-black text-[13px] px-3 py-1.5 border border-emerald-200/70 dark:border-emerald-500/30">
-                    {job.calculatedMatch}%
-                  </span>
-                </div>
-              ))}
-            </div>
+            {loadingJobs ? (
+              <div className="mt-4 p-8 text-center text-sm text-slate-400">
+                {isAr ? 'جاري جلب الوظائف المطابقة...' : 'Loading matched roles...'}
+              </div>
+            ) : displayJobs.length > 0 ? (
+              <div className="mt-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                {displayJobs.map((job) => {
+                  const isSaved = bookmarkedIds.includes(String(job.id));
+                  return (
+                    <div 
+                      key={job.id} 
+                      className="flex items-center justify-between rounded-2xl border border-slate-200/70 dark:border-white/5 bg-white dark:bg-[#0D1527] p-4 shadow-sm hover:border-blue-400/50 transition-all"
+                    >
+                      <div className="min-w-0 flex-1 pe-3">
+                        <h4 className="text-[14px] font-bold text-slate-900 dark:text-white leading-tight truncate">
+                          {isAr ? (job.titleAr || job.title) : job.title}
+                        </h4>
+                        <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                          {isAr ? (job.companyAr || job.company) : job.company} • {isAr ? (job.locationAr || job.location) : job.location}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="rounded-xl bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-400 font-black text-[13px] px-3 py-1.5 border border-emerald-200/70 dark:border-emerald-500/30">
+                          {job.calculatedMatch}%
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleSave(job, e)}
+                          className={`p-2 rounded-xl transition-all cursor-pointer ${
+                            isSaved
+                              ? 'text-blue-600 bg-blue-50 dark:bg-blue-950/70 border border-blue-200 dark:border-blue-800/50 shadow-xs'
+                              : 'text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-white/5 border border-transparent'
+                          }`}
+                          title={isSaved ? (isAr ? 'إزالة من المحفوظات' : 'Remove bookmark') : (isAr ? 'حفظ الوظيفة' : 'Save job')}
+                          aria-label={isSaved ? "Remove bookmark" : "Save job"}
+                        >
+                          <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mt-4 p-6 text-center text-sm text-slate-500 dark:text-slate-400 rounded-xl bg-white dark:bg-[#0D1527] border border-slate-100 dark:border-white/5">
+                {isAr ? 'لا توجد شواغر مطابقة في الوقت الحالي. يمكنك استعراض كافة الفرص في قسم الوظائف لاحقاً.' : 'No matched openings currently available. You can browse all jobs from the jobs page.'}
+              </div>
+            )}
           </motion.div>
 
           {/* Step Footer */}

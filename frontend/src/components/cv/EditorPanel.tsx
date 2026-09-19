@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import {
+  BadgeCheckIcon,
   BriefcaseIcon,
   ClipboardCheckIcon,
   GraduationCapIcon,
@@ -11,6 +12,7 @@ import {
   UserIcon } from
 'lucide-react';
 import { useCV } from '../../contexts/CVContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { SECTION_META } from '../../data/cvData';
 import { sectionStatus } from '../../utils/cvHelpers';
 import type { SectionId } from '../../types/cv';
@@ -22,6 +24,7 @@ import { ExperienceSection } from './sections/ExperienceSection';
 import { EducationSection } from './sections/EducationSection';
 import { ProjectsSection } from './sections/ProjectsSection';
 import { SkillsSection } from './sections/SkillsSection';
+import { CertificationsSection } from './sections/CertificationsSection';
 
 const ICONS: Record<SectionId, React.ComponentType<{className?: string;}>> = {
   contact: UserIcon,
@@ -29,7 +32,8 @@ const ICONS: Record<SectionId, React.ComponentType<{className?: string;}>> = {
   experience: BriefcaseIcon,
   education: GraduationCapIcon,
   projects: ClipboardCheckIcon,
-  skills: LayoutGridIcon
+  skills: LayoutGridIcon,
+  certifications: BadgeCheckIcon
 };
 
 const PANELS: Record<SectionId, React.ComponentType> = {
@@ -38,11 +42,13 @@ const PANELS: Record<SectionId, React.ComponentType> = {
   experience: ExperienceSection,
   education: EducationSection,
   projects: ProjectsSection,
-  skills: SkillsSection
+  skills: SkillsSection,
+  certifications: CertificationsSection
 };
 
 export function EditorPanel() {
   const { cv } = useCV();
+  const { isAr } = useLanguage();
   const [open, setOpen] = useState<SectionId[]>(['contact']);
   const [reorderOpen, setReorderOpen] = useState(false);
 
@@ -60,14 +66,14 @@ export function EditorPanel() {
         <SectionRow
           key="contact"
           id="contact"
-          label={SECTION_META['contact'].label || 'Header & Contact Information'}
+          label={isAr ? SECTION_META['contact'].labelAr : (SECTION_META['contact'].label || 'Header & Contact Information')}
           icon={ICONS['contact']}
           open={open.includes('contact')}
           onToggle={() => toggle('contact')}
           complete={Boolean(cv.contact.fullName.trim() && cv.contact.email.trim())}
           badge={
             <span className="rounded-md bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-400">
-              Header
+              {isAr ? 'البيانات الأساسية' : 'Primary Info'}
             </span>
           }
         >
@@ -84,7 +90,7 @@ export function EditorPanel() {
             <SectionRow
               key={id}
               id={id}
-              label={SECTION_META[id].label}
+              label={isAr ? SECTION_META[id].labelAr : SECTION_META[id].label}
               icon={ICONS[id]}
               open={open.includes(id)}
               onToggle={() => toggle(id)}
@@ -95,12 +101,12 @@ export function EditorPanel() {
                   {id === 'summary' && (
                     <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 dark:bg-violet-950/60 px-2 py-0.5 text-[11px] font-semibold text-violet-700 dark:text-violet-400">
                       <SparklesIcon className="h-3 w-3" aria-hidden="true" />
-                      AI Assisted
+                      {isAr ? 'مدعوم بالذكاء الاصطناعي' : 'AI Assisted'}
                     </span>
                   )}
                   {hidden && (
                     <span className="rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
-                      Hidden
+                      {isAr ? 'مخفي' : 'Hidden'}
                     </span>
                   )}
                 </>
@@ -121,7 +127,7 @@ export function EditorPanel() {
           className="h-4 w-4 text-slate-500"
           aria-hidden="true" />
         
-        Reorder Sections
+        {isAr ? 'إعادة ترتيب الأقسام' : 'Reorder Sections'}
       </button>
 
       <ReorderModal

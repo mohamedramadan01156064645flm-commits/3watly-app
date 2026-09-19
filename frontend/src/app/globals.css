@@ -4,6 +4,9 @@
 @custom-variant dark (&:is(.dark, .dark *));
 
 @theme {
+  --font-sans: var(--font-cairo), 'Cairo', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-cairo: var(--font-cairo), 'Cairo', sans-serif;
+
   --color-brand-blue: #1B57E0;
   --color-brand-blueDark: #1442BC;
   --color-brand-indigo: #4F46E5;
@@ -44,104 +47,114 @@
   --shadow-field: 0 1px 2px rgba(16, 24, 40, 0.04);
 }
 
-@page {
-  size: A4 portrait;
-  margin: 14mm 16mm;
-}
-
 @media print {
-  /* ── Hide everything except the CV ── */
-  body > *,
-  #__next > * {
-    display: none !important;
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm;
   }
 
-  /* Show only the Next.js root wrapper */
-  #__next {
-    display: block !important;
-  }
-
-  /* Show only the CV article itself */
-  .print-page,
-  .print-region,
-  .cv-scroll-viewport {
-    display: block !important;
-    overflow: visible !important;
-    max-height: none !important;
-    height: auto !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    border-radius: 0 !important;
-  }
-
-  /* The .no-print-wrapper is the scroll container — keep it display:block
-     so its children (.print-page) are still rendered, but invisible itself */
-  .no-print-wrapper {
-    display: block !important;
-    overflow: visible !important;
-    max-height: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-
-  /* Hide everything marked no-print */
-  .no-print {
-    display: none !important;
-  }
-
-  /* Force light background & dark ink */
   html,
-  body {
+  html.dark,
+  body,
+  html.dark body {
     background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-image: none !important;
     color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* The CV article: white, no shadow, no rounding */
-  .print-page {
+  /* 1. Explicitly hide all UI chrome and extraneous elements */
+  aside,
+  header,
+  nav,
+  footer,
+  button,
+  input,
+  select,
+  textarea,
+  .no-print,
+  [data-no-print],
+  [role="banner"],
+  [role="navigation"],
+  [aria-hidden="true"] {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* 2. Hide everything by default in print */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* 3. Make ONLY the CV paper and its descendants visible */
+  #cv-paper-root,
+  #cv-paper-root * {
+    visibility: visible !important;
+  }
+
+  /* 4. Position the CV paper cleanly at the top of the printed page */
+  #cv-paper-root {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
     width: 100% !important;
-    max-width: none !important;
-    min-height: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
     background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-image: none !important;
+    color: #0f172a !important;
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
-    font-family: Georgia, "Times New Roman", serif !important;
+    min-height: 0 !important;
+    z-index: 9999999 !important;
   }
 
-  /* Force every text node to black */
-  .print-page,
-  .print-page * {
+  #cv-paper-root,
+  #cv-paper-root * {
     color: #0f172a !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Keep blue-ish accents (role title, company, links) readable */
-  .print-page [class*="text-blue"] {
-    color: #1d4ed8 !important;
+  /* Official black social icons */
+  #cv-paper-root svg {
+    display: inline-block !important;
+    color: #000000 !important;
+    fill: currentColor !important;
+    vertical-align: middle !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* Dividers */
-  .print-page [class*="border-b"] {
-    border-color: #cbd5e1 !important;
+  /* Preserve headings underline */
+  #cv-paper-root [class*="border-b"] {
+    border-color: #94a3b8 !important;
+    border-bottom-width: 1px !important;
+  }
+
+  /* Link styling in print */
+  #cv-paper-root [class*="text-blue"],
+  #cv-paper-root a {
+    color: #1d4ed8 !important;
+    text-decoration: none !important;
+  }
+  #cv-paper-root a[href]:after {
+    content: none !important;
   }
 
   /* Bullet dots */
-  .print-page [class*="bg-blue"] {
+  #cv-paper-root [class*="bg-blue"] {
     background-color: #2563eb !important;
-  }
-
-  /* Hide lucide icons that are decoration-only (they add clutter) */
-  .print-icon {
-    display: none !important;
-  }
-
-  /* Make contact list tighter without icons */
-  .print-page header ul li {
-    gap: 0.25rem !important;
   }
 }
 
@@ -155,7 +168,8 @@
 }
 
 html {
-  scroll-behavior: smooth;
+  /* Use auto scroll by default to prevent double-smoothing acceleration on mouse wheels */
+  scroll-behavior: auto;
   scroll-padding-top: 90px;
 }
 
@@ -182,17 +196,23 @@ body {
 }
 
 html.dark body {
-  background-color: #060913;
+  background-color: #040816;
   color: #F8FAFC;
 }
 
-/* Base dark mode card foundations */
-.dark .bg-white:not(.cv-paper-root) {
+/* Base dark mode card foundations — do not override explicit dark:bg-* utilities */
+.dark .bg-white:not(.cv-paper-root):not([class*="dark:bg-"]) {
   background-color: #0B1120;
 }
 
-.dark .bg-slate-50 {
+.dark .bg-slate-50:not([class*="dark:bg-"]) {
   background-color: #070C18;
+}
+
+/* Enforce the exact #040816 dark background for all sections and page canvas */
+.dark [class*="dark:bg-[#040816]"],
+.dark .dark\:bg-\[\#040816\] {
+  background-color: #040816 !important;
 }
 
 .dark .border-slate-200 {
@@ -289,6 +309,31 @@ html.dark .scroll-slim {
   scrollbar-color: rgba(30, 58, 138, 0.8) transparent;
 }
 
+/* 100% Guaranteed Scrollbar Hider (keeps smooth scroll functional) */
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+.no-scrollbar::-webkit-scrollbar,
+.no-scrollbar *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+.no-scrollbar::-webkit-scrollbar-thumb,
+.no-scrollbar::-webkit-scrollbar-track,
+.no-scrollbar::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+html.dark .no-scrollbar,
+html.dark .no-scrollbar * {
+  scrollbar-width: none !important;
+}
+
+
 /* ========================================================================= */
 /* ULTRA-SMOOTH TOAST NOTIFICATIONS (3WATLY CUSTOM THEME)                   */
 /* ========================================================================= */
@@ -337,47 +382,119 @@ html.dark .scroll-slim {
   On print this element is set to overflow:visible / max-height:none
   so the article always prints in full.
 */
-.cv-scroll-viewport {
-  max-height: 82vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  /* Transparent track – scrollbar floats on the document */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(37, 99, 235, 0.35) transparent;
-  /* Smooth inner scroll */
-  scroll-behavior: smooth;
-  /* Give it a subtle inset shadow so content feels contained */
-  border-radius: 1rem;
+/* ========================================================================= */
+/* TECH MARQUEE FLOATING ANIMATIONS                                          */
+/* ========================================================================= */
+
+@keyframes float-soft {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -8px, 0);
+  }
 }
 
-/* Light-mode webkit scrollbar */
-.cv-scroll-viewport::-webkit-scrollbar {
-  width: 5px;
+@keyframes glow-drift {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
 }
-.cv-scroll-viewport::-webkit-scrollbar-track {
-  background: transparent;
+
+.animate-float-soft {
+  animation: float-soft 6.5s ease-in-out infinite;
 }
-.cv-scroll-viewport::-webkit-scrollbar-thumb {
-  background: rgba(37, 99, 235, 0.35);
-  border-radius: 9999px;
+
+.animate-glow-drift {
+  animation: glow-drift 5s ease-in-out infinite;
 }
-.cv-scroll-viewport::-webkit-scrollbar-thumb:hover {
-  background: rgba(29, 78, 216, 0.7);
+
+/* ========================================================================= */
+/* TECH MARQUEE — LIGHT / DARK MODE CARD THEMING                             */
+/* ========================================================================= */
+
+/* Dark mode card interior (default — dark glass) */
+.tech-card-inner {
+  background: linear-gradient(155deg, rgba(10, 22, 45, 0.92) 0%, rgba(5, 12, 28, 0.95) 55%, rgba(2, 6, 16, 0.98) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -12px 20px -12px rgba(0,0,0,0.9);
 }
-.cv-scroll-viewport::-webkit-scrollbar-button {
+
+.tech-card-title {
+  color: #ffffff;
+}
+
+.tech-card-chevron-bg {
+  background: linear-gradient(150deg, rgba(56,189,248,0.28) 0%, rgba(4,12,28,0.85) 80%);
+}
+
+/* Light mode overrides */
+html:not(.dark) .tech-card-shell {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 8px 24px -4px rgba(15, 23, 42, 0.07), 0 2px 6px rgba(15, 23, 42, 0.03) !important;
+}
+
+html:not(.dark) .tech-card-glow {
+  opacity: 0.15 !important;
+}
+
+html:not(.dark) .tech-card-node {
   display: none !important;
-  height: 0 !important;
 }
 
-/* Dark-mode overrides */
-html.dark .cv-scroll-viewport {
-  scrollbar-color: rgba(30, 58, 138, 0.8) transparent;
+html:not(.dark) .tech-card-inner {
+  background: linear-gradient(175deg, #FFFFFF 0%, #F8FAFC 100%) !important;
+  box-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04), inset 0 1px 0 #FFFFFF !important;
+  border: 1px solid rgba(226, 232, 240, 0.95);
 }
-html.dark .cv-scroll-viewport::-webkit-scrollbar-thumb {
-  background: rgba(30, 58, 138, 0.8);
-  border: 1px solid rgba(59, 130, 246, 0.25);
+
+html:not(.dark) .tech-card-squircle {
+  background: linear-gradient(145deg, #FFFFFF 0%, #F1F5F9 100%) !important;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05), inset 0 1px 0 #FFFFFF !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
 }
-html.dark .cv-scroll-viewport::-webkit-scrollbar-thumb:hover {
-  background: rgba(37, 99, 235, 0.85);
-  border-color: rgba(96, 165, 250, 0.5);
+
+html:not(.dark) .tech-card-icon-img {
+  filter: drop-shadow(0 1.5px 2px rgba(15, 23, 42, 0.1)) !important;
 }
+
+html:not(.dark) .tech-card-title {
+  color: #0F172A !important;
+  text-shadow: none !important;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+html:not(.dark) .tech-card-subtitle {
+  color: #334155 !important;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+html:not(.dark) .tech-card-chevron-bg {
+  background: #F1F5F9 !important;
+  border: 1px solid rgba(203, 213, 225, 0.8) !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06) !important;
+}
+
+html:not(.dark) .tech-card-chevron-icon {
+  color: #1D4ED8 !important;
+  filter: none !important;
+}
+
+/* Light mode: make neon wave visible on light background */
+html:not(.dark) .tech-marquee-wave {
+  opacity: 0.42;
+  filter: saturate(1.25);
+}
+
+/* Light mode: spark nodes dimmer */
+html:not(.dark) .animate-glow-drift {
+  opacity: 0.5;
+}
+

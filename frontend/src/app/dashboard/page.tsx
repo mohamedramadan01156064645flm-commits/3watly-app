@@ -17,7 +17,9 @@ import {
   TrendingUp, 
   ArrowRight,
   Info,
-  Calendar
+  Calendar,
+  FileText,
+  UploadCloud
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -26,23 +28,37 @@ import { ApiService } from '@/services/api';
 import { CompanyLogo } from '@/components/brand/CompanyLogo';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { useCV } from '@/contexts/CVContext';
+import { toast } from 'sonner';
+import { getSavedJobIds, toggleJobBookmark, SAVED_JOBS_EVENT } from '@/utils/jobBookmarks';
 
 export default function DashboardPage() {
   const { isAr } = useLanguage();
   const { user } = useAuth();
-  const { analysis } = useCV();
+  const { activeVersion, cv, versions, analysis } = useCV();
 
   const [userParsedCv, setUserParsedCv] = useState<any>(null);
   const [liveJobs, setLiveJobs] = useState<any[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [marketStats, setMarketStats] = useState<any>(null);
 
+  // 1. Immediately hydrate client cached data from localStorage once on mount & listen for CV changes
   React.useEffect(() => {
-    let mounted = true;
-
-    // 1. Immediately hydrate client cached data from localStorage
     try {
-      const cachedJobs = localStorage.getItem('3watly_dashboard_jobs');
+      const savedCv = localStorage.getItem(`3watly_parsed_cv_${user?.id}`);
+      if (savedCv) {
+        setUserParsedCv(JSON.parse(savedCv));
+      }
+    } catch {}
+
+    try {
+      const rawSavedJobs = localStorage.getItem(`3watly_saved_jobs_${user?.id}`);
+      if (rawSavedJobs) {
+        setBookmarkedJobs(JSON.parse(rawSavedJobs) as string[]);
+      }
+    } catch {}
+
+    try {
+      const cachedJobs = localStorage.getItem(`3watly_dashboard_jobs_${user?.id}`);
       if (cachedJobs) {
         const parsed = JSON.parse(cachedJobs);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -53,20 +69,130 @@ export default function DashboardPage() {
     } catch {}
 
     try {
-      const cachedStats = localStorage.getItem('3watly_market_stats');
+      const cachedStats = localStorage.getItem(`3watly_market_stats_${user?.id}`);
       if (cachedStats) {
         setMarketStats(JSON.parse(cachedStats));
       }
     } catch {}
 
-    try {
-      const savedCv = localStorage.getItem('3watly_parsed_cv');
-      if (savedCv) setUserParsedCv(JSON.parse(savedCv));
-    } catch {}
+    const handleCvChanged = () => {
+      try {
+        const savedCv = localStorage.getItem(`3watly_parsed_cv_${user?.id}`);
+        if (savedCv) {
+          setUserParsedCv(JSON.parse(savedCv));
+        }
+      } catch {}
+    };
+    window.addEventListener('3watly_active_cv_changed', handleCvChanged);
+    return () => window.removeEventListener('3watly_active_cv_changed', handleCvChanged);
+  }, []);
 
-    // 2. Parallel background fetch for jobs + market stats (super fast lean endpoint)
+  // Check if candidate has an actual CV in CVContext or localStorage
+  const hasCv = React.useMemo(() => {
+    // 1. Check activeVersion in CVContext
+    if (activeVersion) {
+      const d = activeVersion.cvData;
+      const hasSkills = Array.isArray(d?.skills) && d.skills.some(g => Array.isArray(g.skills) && g.skills.length > 0);
+      const hasExp = Array.isArray(d?.experience) && d.experience.length > 0;
+      const hasEdu = Array.isArray(d?.education) && d.education.length > 0;
+      const hasProjects = Array.isArray(d?.projects) && d.projects.length > 0;
+      const hasName = Boolean(d?.contact?.fullName && d.contact.fullName.trim().length > 0);
+      const hasTitle = Boolean(d?.contact?.jobTitle && d.contact.jobTitle.trim().length > 0);
+      const hasSummary = Boolean(d?.summary && d.summary.trim().length > 0);
+      if (hasSkills || hasExp || hasEdu || hasProjects || hasName || hasTitle || hasSummary) {
+        return true;
+      }
+    }
+
+    // 2. Check current cv object in CVContext
+    if (cv) {
+      const hasSkills = Array.isArray(cv.skills) && cv.skills.some(g => Array.isArray(g.skills) && g.skills.length > 0);
+      const hasExp = Array.isArray(cv.experience) && cv.experience.length > 0;
+      const hasEdu = Array.isArray(cv.education) && cv.education.length > 0;
+      const hasName = Boolean(cv.contact?.fullName && cv.contact.fullName.trim().length > 0);
+      if (hasSkills || hasExp || hasEdu || hasName) {
+        return true;
+      }
+    }
+
+    // 3. Check any version in versions list
+    if (Array.isArray(versions) && versions.length > 0) {
+      const hasValidVer = versions.some(v => {
+        const d = v.cvData;
+        return (
+          (Array.isArray(d?.skills) && d.skills.some(g => g.skills?.length > 0)) ||
+          (Array.isArray(d?.experience) && d.experience.length > 0) ||
+          (Array.isArray(d?.education) && d.education.length > 0) ||
+          Boolean(d?.contact?.fullName && d.contact.fullName.trim().length > 0)
+        );
+      });
+      if (hasValidVer) return true;
+    }
+
+    // 4. Check userParsedCv from localStorage
+    if (userParsedCv) {
+      const hasSkills = Array.isArray(userParsedCv.skills) && userParsedCv.skills.length > 0;
+      const hasExp = (Array.isArray(userParsedCv.experiences) && userParsedCv.experiences.length > 0) ||
+                     (Array.isArray(userParsedCv.experience) && userParsedCv.experience.length > 0);
+      const hasEdu = (Array.isArray(userParsedCv.educationHistory) && userParsedCv.educationHistory.length > 0) ||
+                     (Array.isArray(userParsedCv.education) && userParsedCv.education.length > 0);
+      const hasName = Boolean(userParsedCv.fullName && userParsedCv.fullName.trim().length > 0);
+      const isQuickPlaceholder = (!hasExp && !hasEdu && userParsedCv.filename === 'Quick_Profile.pdf');
+      if (!isQuickPlaceholder && (hasSkills || hasExp || hasEdu || hasName)) {
+        return true;
+      }
+    }
+
+    return false;
+  }, [activeVersion, cv, versions, userParsedCv]);
+
+  const isCvMissing = !hasCv;
+
+  const candidateSkills = React.useMemo(() => {
+    if (Array.isArray(userParsedCv?.skills) && userParsedCv.skills.length > 0) {
+      return userParsedCv.skills;
+    }
+    const target = activeVersion?.cvData || cv;
+    if (target?.skills) {
+      const flat: string[] = [];
+      target.skills.forEach(g => {
+        if (Array.isArray(g.skills)) {
+          g.skills.forEach(s => {
+            if (s && !flat.includes(s)) flat.push(s);
+          });
+        }
+      });
+      if (flat.length > 0) return flat;
+    }
+    return [];
+  }, [userParsedCv, activeVersion, cv]);
+
+  const candidateRole = React.useMemo(() => {
+    return (
+      userParsedCv?.targetRole ||
+      userParsedCv?.currentTitle ||
+      activeVersion?.targetRole ||
+      activeVersion?.cvData?.contact?.jobTitle ||
+      cv?.contact?.jobTitle ||
+      ''
+    );
+  }, [userParsedCv, activeVersion, cv]);
+
+  const candidateSkillsKey = React.useMemo(() => candidateSkills.join(','), [candidateSkills]);
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    const queryParams: Record<string, string> = {
+      limit: '40',
+      sortBy: 'match',
+    };
+    if (candidateSkills.length > 0) queryParams.skills = candidateSkills.join(',');
+    if (candidateRole) queryParams.targetRole = candidateRole;
+
+    // Parallel background fetch for jobs + market stats
     Promise.all([
-      ApiService.getJobs({ limit: '6' }).catch(() => null),
+      ApiService.getJobs(queryParams).catch(() => null),
       fetch('/api/market/stats').then((r) => r.json()).catch(() => null),
     ]).then(([jobsRes, statsRes]) => {
       if (!mounted) return;
@@ -76,7 +202,7 @@ export default function DashboardPage() {
         if (Array.isArray(data) && data.length > 0) {
           setLiveJobs(data);
           try {
-            localStorage.setItem('3watly_dashboard_jobs', JSON.stringify(data));
+            localStorage.setItem(`3watly_dashboard_jobs_${user?.id}`, JSON.stringify(data));
           } catch {}
         }
       }
@@ -86,12 +212,12 @@ export default function DashboardPage() {
           totalJobs: statsRes.stats.totalJobs,
           totalCompanies: statsRes.stats.totalCompanies,
           remoteJobsPercentage: statsRes.stats.remoteJobsPercentage,
-          topSkillName: statsRes.stats.topSkillName || 'SQL',
-          topSkillPercentage: statsRes.stats.topSkillPercentage || 82,
+          topSkillName: statsRes.stats.topSkillName || '',
+          topSkillPercentage: statsRes.stats.topSkillPercentage || 0,
         };
         setMarketStats(stats);
         try {
-          localStorage.setItem('3watly_market_stats', JSON.stringify(stats));
+          localStorage.setItem(`3watly_market_stats_${user?.id}`, JSON.stringify(stats));
         } catch {}
       }
     }).finally(() => {
@@ -101,28 +227,75 @@ export default function DashboardPage() {
     });
 
     return () => { mounted = false; };
-  }, []);
+  }, [candidateSkillsKey, candidateRole]);
 
-  const [bookmarkedJobs, setBookmarkedJobs] = useState<string[]>([]);
+  const [bookmarkedJobs, setBookmarkedJobs] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      return getSavedJobIds(user?.id);
+    }
+    return [];
+  });
+
+  // Sync bookmark state when saves happen in other components/tabs
+  React.useEffect(() => {
+    const handler = () => setBookmarkedJobs(getSavedJobIds(user?.id));
+    window.addEventListener(SAVED_JOBS_EVENT, handler);
+    window.addEventListener('storage', handler);
+    return () => {
+      window.removeEventListener(SAVED_JOBS_EVENT, handler);
+      window.removeEventListener('storage', handler);
+    };
+  }, [user?.id]);
 
   const toggleBookmark = (id: string | number, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const strId = String(id);
-    setBookmarkedJobs(prev => 
-      prev.includes(strId) ? prev.filter(item => item !== strId) : [...prev, strId]
-    );
+    const { isSaved, list } = toggleJobBookmark(id, user?.id);
+    setBookmarkedJobs(list);
+    if (isSaved) {
+      toast.success(isAr ? 'تم حفظ الوظيفة في قائمة المحفوظات ⭐' : 'Job saved to bookmarks ⭐');
+    } else {
+      toast.info(isAr ? 'تمت إزالة الوظيفة من المحفوظات' : 'Job removed from bookmarks');
+    }
   };
 
-  const careerAlignment = userParsedCv?.atsReport?.score || (analysis?.score ? Math.min(98, Math.max(60, analysis.score)) : 84);
+  const careerAlignment = userParsedCv?.atsReport?.score ?? (analysis?.score ? Math.min(98, Math.max(20, analysis.score)) : null);
   const missingSkills = analysis?.keywords?.missing?.length
     ? analysis.keywords.missing.slice(0, 2)
-    : userParsedCv?.skills?.length
-    ? [userParsedCv.skills[0], userParsedCv.skills[1] || 'Git']
-    : ['Power BI', 'SQL'];
+    : [];
 
   const topJobs = React.useMemo(() => {
-    return liveJobs.slice(0, 3).map((job: any) => {
+    // Role-to-domain keyword map for tech domain filtering
+    const ROLE_DOMAIN_KEYWORDS: Record<string, string[]> = {
+      'data analyst':      ['data analyst', 'data analysis', 'business intelligence', 'bi analyst', 'analytics', 'power bi', 'tableau', 'sql analyst', 'reporting analyst'],
+      'data engineer':     ['data engineer', 'data pipeline', 'etl', 'airflow', 'spark', 'big data', 'dbt', 'data infrastructure'],
+      'software engineer': ['software engineer', 'software developer', 'fullstack', 'full stack', 'backend', 'frontend', 'web developer', 'react developer', 'node developer'],
+      'ml engineer':       ['machine learning', 'ml engineer', 'ai engineer', 'data scientist', 'deep learning', 'nlp engineer', 'computer vision'],
+      'devops':            ['devops', 'cloud engineer', 'site reliability', 'sre', 'infrastructure engineer', 'kubernetes', 'platform engineer'],
+    };
+
+    // Derive the user's role domain from candidateRole string
+    const roleLower = (candidateRole || '').toLowerCase();
+    const matchedDomainKey = Object.keys(ROLE_DOMAIN_KEYWORDS).find(k => roleLower.includes(k));
+    const domainKeywords = matchedDomainKey
+      ? ROLE_DOMAIN_KEYWORDS[matchedDomainKey]
+      : Object.values(ROLE_DOMAIN_KEYWORDS).flat(); // if unknown role, show all tech jobs
+
+    // Filter to domain-relevant jobs only (fall back to all if too few)
+    const domainJobs = liveJobs.filter((j: any) => {
+      const t = (j.title || '').toLowerCase();
+      return domainKeywords.some(kw => t.includes(kw));
+    });
+    const sourceJobs = domainJobs.length >= 2 ? domainJobs : liveJobs;
+
+    // When no CV: sort by recency; when CV exists: sort by matchScore descending
+    const sorted = isCvMissing
+      ? [...sourceJobs].sort((a: any, b: any) => new Date(b.postedAt || 0).getTime() - new Date(a.postedAt || 0).getTime())
+      : [...sourceJobs].sort((a: any, b: any) => (b.matchScore || 0) - (a.matchScore || 0));
+    const highMatches = sorted.filter((j: any) => (j.matchScore || 0) >= 55);
+    const chosen = highMatches.length >= 3 ? highMatches.slice(0, 4) : sorted.slice(0, 4);
+
+    return chosen.map((job: any) => {
       // Gather all legitimate job skills
       const rawJobSkills: string[] = Array.isArray(job.required_skills) && job.required_skills.length > 0
         ? job.required_skills
@@ -156,18 +329,52 @@ export default function DashboardPage() {
         companyLogo: job.companyLogo || job.company_logo || null,
         location: job.location || 'Cairo, Egypt',
         locationAr: job.locationAr || job.location || 'القاهرة، مصر',
-        matchScore: job.matchScore || 82,
+        matchScore: job.matchScore ?? null,
         skills: displaySkills,
         extraSkillsCount,
         postedAgo: job.postedAgo || 'Recently',
         postedAgoAr: job.postedAgoAr || 'مؤخراً',
       };
     });
-  }, [liveJobs]);
+  }, [liveJobs, isCvMissing]);
+
 
   return (
     <AppShell>
       <div className="space-y-6 max-w-[1400px] mx-auto pb-10">
+        
+        {/* Missing / Unuploaded CV Prompt Banner */}
+        {isCvMissing && (
+          <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-50/90 via-orange-50/70 to-blue-50/60 dark:from-amber-950/30 dark:via-orange-950/20 dark:to-blue-950/30 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white font-black shadow-md">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-[15px] font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>{isAr ? "لم تقم برفع سيرتك الذاتية بعد" : "No Resume Uploaded Yet"}</span>
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200">
+                    {isAr ? "موصى به" : "Recommended"}
+                  </span>
+                </h3>
+                <p className="text-[12.5px] text-slate-600 dark:text-slate-300 mt-0.5">
+                  {isAr
+                    ? "ارفع سيرتك الذاتية (PDF) أو أنشئها عبر المحرر الذكي للحصول على فحص ATS حقيقي ونسب توافق دقيقة 100% مع وظائف السوق."
+                    : "Upload your resume (PDF) or build one to unlock real ATS diagnostics and accurate job match percentages."}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 shrink-0 w-full sm:w-auto">
+              <Link
+                href="/cv-builder"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1B57E0] hover:bg-blue-700 text-white font-bold text-[13px] shadow-sm transition-all cursor-pointer"
+              >
+                <UploadCloud className="w-4 h-4" />
+                <span>{isAr ? "رفع أو إنشاء CV" : "Upload / Build CV"}</span>
+              </Link>
+            </div>
+          </div>
+        )}
         
         {/* ========================================================================= */}
         {/* 1. TOP 4 STAT CARDS (Matching Image 1 Exactly)                           */}
@@ -363,32 +570,42 @@ export default function DashboardPage() {
                       className="dark:stroke-slate-800" 
                       strokeWidth="9" 
                     />
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="40"
-                      fill="none"
-                      stroke="#1B57E0"
-                      strokeWidth="9"
-                      strokeLinecap="round"
-                      strokeDasharray={2 * Math.PI * 40}
-                      strokeDashoffset={2 * Math.PI * 40 * (1 - careerAlignment / 100)}
-                    />
+                    {careerAlignment !== null && (
+                      <circle
+                        cx="50"
+                        cy="50"
+                        r="40"
+                        fill="none"
+                        stroke="#1B57E0"
+                        strokeWidth="9"
+                        strokeLinecap="round"
+                        strokeDasharray={2 * Math.PI * 40}
+                        strokeDashoffset={2 * Math.PI * 40 * (1 - careerAlignment / 100)}
+                      />
+                    )}
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center">
                     <span className="text-[26px] font-black text-[#0B132B] dark:text-white leading-none">
-                      {careerAlignment}%
+                      {careerAlignment !== null ? `${careerAlignment}%` : '--%'}
                     </span>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <p className="text-[13.5px] font-bold text-[#0B132B] dark:text-slate-200 leading-snug">
-                    {isAr ? "متوافق جيداً مع متطلبات السوق الحالية" : "You're aligned with current market demand"}
+                    {careerAlignment !== null
+                      ? (isAr ? "متوافق مع متطلبات السوق الحالية" : "Aligned with current market demand")
+                      : (isAr ? "يتطلب رفع أو إنشاء سيرة ذاتية لحساب التوافق" : "Requires a CV to calculate alignment")}
                   </p>
-                  <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#E8F8F0] dark:bg-emerald-950/60 text-[#12B76A] dark:text-emerald-400 text-[11.5px] font-bold">
-                    <span>↑ 6% {isAr ? "عن الأسبوع الماضي" : "from last week"}</span>
-                  </div>
+                  {careerAlignment !== null ? (
+                    <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#E8F8F0] dark:bg-emerald-950/60 text-[#12B76A] dark:text-emerald-400 text-[11.5px] font-bold">
+                      <span>✓ {isAr ? "محسوب من بيانات سيرتك" : "Based on your verified profile"}</span>
+                    </div>
+                  ) : (
+                    <Link href="/cv-builder" className="inline-block text-[11.5px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                      {isAr ? "إنشاء سيرة ذاتية الآن ←" : "Create CV now →"}
+                    </Link>
+                  )}
                 </div>
               </div>
             </div>
@@ -431,16 +648,33 @@ export default function DashboardPage() {
 
               {/* Content */}
               <div className="mt-6 space-y-2.5">
-                <h3 className="text-[15.5px] font-bold text-[#0B132B] dark:text-white leading-snug">
-                  {isAr ? "طور مهارات " : "Improve "}
-                  <span className="text-[#1B57E0] dark:text-[#60A5FA]">{missingSkills[0] || 'SQL'}</span> {isAr ? "و " : "and "}
-                  <span className="text-[#1B57E0] dark:text-[#60A5FA]">{missingSkills[1] || 'Power BI'}</span>.
-                </h3>
-                <p suppressHydrationWarning className="text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                  {isAr
-                    ? `هاتان هما أكثر مهارتين ذات تأثير مرتفع تنقصان ملفك مقارنة بـ ${marketStats?.totalJobs || 413} وظيفة نشطة في سوق العمل المصري.`
-                    : `These are the two highest-impact skills missing from your profile based on ${marketStats?.totalJobs || 413} active job postings.`}
-                </p>
+                {missingSkills.length > 0 ? (
+                  <>
+                    <h3 className="text-[15.5px] font-bold text-[#0B132B] dark:text-white leading-snug">
+                      {isAr ? "طور مهارات " : "Improve "}
+                      <span className="text-[#1B57E0] dark:text-[#60A5FA]">{missingSkills[0]}</span>
+                      {missingSkills[1] && (
+                        <> {isAr ? "و " : "and "} <span className="text-[#1B57E0] dark:text-[#60A5FA]">{missingSkills[1]}</span></>
+                      )}.
+                    </h3>
+                    <p suppressHydrationWarning className="text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      {isAr
+                        ? `هذه من أكثر المهارات المطلوبة في إعلانات الوظائف الحالية لرفع فرص قبولك.`
+                        : `These are high-impact skills required in active job openings to boost your interview callback rate.`}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-[15.5px] font-bold text-[#0B132B] dark:text-white leading-snug">
+                      {isAr ? "سيرتك الذاتية تغطي المهارات الأساسية" : "Skills Profile Status"}
+                    </h3>
+                    <p className="text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      {isAr
+                        ? "قم بتحديث خبراتك ومشاريعك باستمرار لمطابقة أفضل الشواغر المتاحة في السوق."
+                        : "Keep your projects and skills updated to match the highest-fit roles in the market."}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
 
@@ -592,115 +826,120 @@ export default function DashboardPage() {
 
             {/* Live Job Cards */}
             {topJobs.map((job) => {
-              const isSaved = bookmarkedJobs.includes(job.id);
+              const isSaved = bookmarkedJobs.includes(String(job.id));
               return (
-                <Link
+                <div
                   key={job.id}
-                  href={`/jobs/${job.id}`}
                   className="rounded-[20px] border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0E1628] p-4 hover:shadow-md hover:border-blue-400/50 transition-all flex flex-col justify-between group"
                 >
-                  <div>
-                    {/* Top Row: Company Logo + Title/Company + Match Donut Ring */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2.5 min-w-0">
-                        {/* Official Company Logo Badge */}
-                        <CompanyLogo
-                          company={job.company}
-                          logoUrl={job.companyLogo}
-                          size="sm"
-                          className="shrink-0"
-                        />
+                  <Link
+                    href={`/jobs/${job.id}`}
+                    className="flex-1 flex flex-col justify-between"
+                  >
+                    <div>
+                      {/* Top Row: Company Logo + Title/Company + Match Donut Ring */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          {/* Official Company Logo Badge */}
+                          <CompanyLogo
+                            company={job.company}
+                            logoUrl={job.companyLogo}
+                            size="sm"
+                            className="shrink-0"
+                          />
 
-                        <div className="min-w-0">
-                          <h3 className="text-[13.5px] font-bold text-[#0B132B] dark:text-white leading-tight truncate group-hover:text-blue-600 transition-colors">
-                            {isAr ? job.titleAr : job.title}
-                          </h3>
-                          <p className="text-[12px] font-normal text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                            {isAr ? job.companyAr : job.company}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Match Ring */}
-                      <div className="flex flex-col items-center shrink-0">
-                        <div className="relative h-11 w-11">
-                          <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
-                            <circle cx="50" cy="50" r="40" fill="none" stroke="#E8F8F0" className="dark:stroke-emerald-950/60" strokeWidth="9" />
-                            <circle
-                              cx="50"
-                              cy="50"
-                              r="40"
-                              fill="none"
-                              stroke="#12B76A"
-                              strokeWidth="9"
-                              strokeLinecap="round"
-                              strokeDasharray={2 * Math.PI * 40}
-                              strokeDashoffset={2 * Math.PI * 40 * (1 - job.matchScore / 100)}
-                            />
-                          </svg>
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-[11px] font-black text-[#0B132B] dark:text-white leading-none">
-                              {job.matchScore}%
-                            </span>
+                          <div className="min-w-0">
+                            <h3 className="text-[13.5px] font-bold text-[#0B132B] dark:text-white leading-tight truncate group-hover:text-blue-600 transition-colors">
+                              {isAr ? job.titleAr : job.title}
+                            </h3>
+                            <p className="text-[12px] font-normal text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                              {isAr ? job.companyAr : job.company}
+                            </p>
                           </div>
                         </div>
-                        <span className="text-[10px] font-medium text-slate-400 mt-0.5">
-                          {isAr ? "توافق" : "Match"}
-                        </span>
+
+                        {/* Match Ring */}
+                        <div className="flex flex-col items-center shrink-0">
+                          <div className="relative h-11 w-11">
+                            <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
+                              <circle cx="50" cy="50" r="40" fill="none" stroke="#E8F8F0" className="dark:stroke-emerald-950/60" strokeWidth="9" />
+                              {job.matchScore != null && (
+                                <circle
+                                  cx="50"
+                                  cy="50"
+                                  r="40"
+                                  fill="none"
+                                  stroke="#12B76A"
+                                  strokeWidth="9"
+                                  strokeLinecap="round"
+                                  strokeDasharray={2 * Math.PI * 40}
+                                  strokeDashoffset={2 * Math.PI * 40 * (1 - job.matchScore / 100)}
+                                />
+                              )}
+                            </svg>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-[11px] font-black text-[#0B132B] dark:text-white leading-none">
+                                {job.matchScore != null ? `${job.matchScore}%` : '--%'}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-medium text-slate-400 mt-0.5">
+                            {job.matchScore != null
+                              ? (isAr ? 'توافق' : 'Match')
+                              : (isAr ? 'يتطلب CV' : 'Needs CV')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Location & Work Type */}
+                      <p className="mt-2 text-[11.5px] text-slate-500 dark:text-slate-400 truncate">
+                        {isAr ? job.locationAr : job.location}
+                      </p>
+
+                      {/* Skill Pills */}
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5 min-h-[30px]">
+                        {job.skills.map((skill: { name: string; isMatched: boolean }) => (
+                          <span
+                            key={skill.name}
+                            className={`px-2.5 py-0.5 rounded-md text-[11px] font-semibold border transition-colors ${
+                              skill.isMatched
+                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                                : 'bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-white/10'
+                            }`}
+                          >
+                            {skill.name}
+                          </span>
+                        ))}
+                        {job.extraSkillsCount > 0 && (
+                          <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-[10.5px] font-bold text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                            +{job.extraSkillsCount}
+                          </span>
+                        )}
                       </div>
                     </div>
-
-                    {/* Location & Work Type */}
-                    <p className="mt-2 text-[11.5px] text-slate-500 dark:text-slate-400 truncate">
-                      {isAr ? job.locationAr : job.location}
-                    </p>
-
-                    {/* Skill Pills */}
-                    <div className="mt-3 flex flex-wrap items-center gap-1.5 min-h-[30px]">
-                      {job.skills.map((skill: { name: string; isMatched: boolean }) => (
-                        <span
-                          key={skill.name}
-                          className={`px-2.5 py-0.5 rounded-md text-[11px] font-semibold border transition-colors ${
-                            skill.isMatched
-                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                              : 'bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-white/10'
-                          }`}
-                        >
-                          {skill.name}
-                        </span>
-                      ))}
-                      {job.extraSkillsCount > 0 && (
-                        <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-[10.5px] font-bold text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                          +{job.extraSkillsCount}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                  </Link>
 
                   {/* Bottom Info: Posted Time + Bookmark Icon */}
                   <div className="mt-4 pt-3 border-t border-slate-100 dark:border-white/10 flex items-center justify-between">
                     <span className="text-[11px] font-normal text-slate-400 dark:text-slate-500">
                       {isAr ? job.postedAgoAr : job.postedAgo}
                     </span>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => toggleBookmark(job.id, e)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          toggleBookmark(job.id, e as any);
-                        }
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleBookmark(job.id, e);
                       }}
-                      className={`p-1 rounded-lg transition-colors cursor-pointer ${
-                        isSaved ? 'text-blue-600 fill-blue-600' : 'text-slate-400 hover:text-slate-600'
+                      className={`p-1.5 rounded-lg transition-all cursor-pointer hover:scale-110 active:scale-95 ${
+                        isSaved ? 'text-blue-600 fill-blue-600 bg-blue-50 dark:bg-blue-950/60' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'
                       }`}
                       aria-label={isSaved ? "Remove bookmark" : "Bookmark job"}
                     >
                       <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
-                    </span>
+                    </button>
                   </div>
-                </Link>
+                </div>
               );
             })}
 

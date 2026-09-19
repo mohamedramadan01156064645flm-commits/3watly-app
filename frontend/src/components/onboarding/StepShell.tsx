@@ -16,7 +16,7 @@ export function StepShell({ step, children }: StepShellProps) {
   const router = useRouter();
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-[#FBFCFE] dark:bg-[#060913] transition-colors duration-300">
+    <div className="flex min-h-screen w-full flex-col bg-[#FBFCFE] dark:bg-[#040816] transition-colors duration-300">
       <AppHeader />
       <div className="border-b border-line dark:border-white/10 bg-white dark:bg-[#0B1120] py-3.5">
         <Stepper current={step} onStepSelect={(path) => router.push(path)} />

@@ -4,7 +4,8 @@ export type SectionId =
   | 'experience'
   | 'education'
   | 'projects'
-  | 'skills';
+  | 'skills'
+  | 'certifications';
 
 export type SocialPlatform =
   | 'LinkedIn'
@@ -40,11 +41,13 @@ export interface ExperienceItem {
   id: string;
   role: string;
   company: string;
+  companyUrl?: string;
   startDate: string;
   endDate: string;
   current: boolean;
   location: string;
   bullets: string[];
+  type?: 'job' | 'internship';
 }
 
 export interface EducationItem {
@@ -72,6 +75,14 @@ export interface SkillGroup {
   skills: string[];
 }
 
+export interface CertificationItem {
+  id: string;
+  name: string;
+  issuer: string;
+  url?: string;
+  date?: string;
+}
+
 export interface CVData {
   contact: Contact;
   summary: string;
@@ -79,6 +90,7 @@ export interface CVData {
   education: EducationItem[];
   projects: ProjectItem[];
   skills: SkillGroup[];
+  certifications: CertificationItem[];
   /** Order the sections appear in on the rendered CV. */
   sectionOrder: SectionId[];
   /** Sections excluded from the rendered CV (still editable). */
@@ -91,7 +103,15 @@ export type TemplateId = 'ats-classic' | 'compact' | 'two-column' | 'simple' | '
 
 export type SaveStatus = 'saved' | 'saving';
 
-export type FixId = 'keywords' | 'metrics' | 'skills-summary';
+export type FixId =
+  | 'keywords'
+  | 'metrics'
+  | 'skills-summary'
+  | 'summary-missing'
+  | 'summary-short'
+  | 'linkedin-missing'
+  | 'few-bullets'
+  | 'few-skills';
 
 export type ScoreBand = 'excellent' | 'good' | 'average' | 'poor';
 
@@ -104,4 +124,6 @@ export interface CVVersion {
   createdAt: string;
   updatedAt: string;
   isActive: boolean;
+  atsScore?: number;
+  analysis?: any;
 }

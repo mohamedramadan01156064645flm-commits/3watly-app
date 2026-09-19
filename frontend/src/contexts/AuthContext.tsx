@@ -6,34 +6,42 @@ import { resolveDisplayName } from '@/utils/formatName';
 
 
 
+export type UserRole = 'owner' | 'admin' | 'user';
+export type AccountStatus = 'active' | 'suspended';
+
 export interface User {
   id?: string;
   email: string;
   fullName: string;
   avatarUrl?: string | null;
   targetRole?: string;
+  experience?: string;
   location?: string;
   phone?: string;
   createdAt?: string;
   token?: string;
   hasUploadedCv?: boolean;
   onboardingCompleted?: boolean;
+  role?: UserRole;
+  accountStatus?: AccountStatus;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  isAdmin: boolean;
+  isOwner: boolean;
   login: (email: string, password: string, remember?: boolean) => Promise<{ success: boolean; error?: string; onboardingCompleted?: boolean }>;
   signup: (fullName: string, email: string, password: string) => Promise<{ success: boolean; error?: string; onboardingCompleted?: boolean }>;
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   signInWithGoogle: () => Promise<{ success: boolean; error?: string; redirected?: boolean }>;
   signInWithLinkedIn: () => Promise<{ success: boolean; error?: string; redirected?: boolean }>;
-  loginWithSocialAccount: (account: { fullName: string; email: string; avatarUrl?: string | null; provider?: 'google' | 'linkedin' }) => Promise<{ success: boolean; onboardingCompleted?: boolean }>;
   logout: () => Promise<void>;
   updateAvatar: (file: File) => Promise<void>;
   removeAvatar: () => Promise<void>;
   updateFullName: (name: string) => Promise<void>;
   updateTargetRole: (role: string) => Promise<void>;
+  updateExperience: (experience: string) => Promise<void>;
   setOnboardingCompleted: (completed: boolean) => Promise<void>;
   deleteAccount: (confirmation?: string) => Promise<{ success: boolean; error?: string }>;
 }
@@ -83,11 +91,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             let onboardingCompleted = metadata.onboarding_completed ?? false;
             let avatarUrl = metadata.avatar_url || metadata.picture || null;
             let fullName = resolvedName;
+            let role: UserRole = 'user';
+            let accountStatus: AccountStatus = 'active';
 
             try {
               const { data: profile } = await supabase
                 .from('profiles')
-                .select('*')
+                .select('full_name, onboarding_completed, avatar_url, role, account_status')
                 .eq('id', session.user.id)
                 .maybeSingle();
 
@@ -100,6 +110,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }
                 if (profile.avatar_url) {
                   avatarUrl = profile.avatar_url;
+                }
+                if (profile.role) {
+                  role = profile.role as UserRole;
+                }
+                if (profile.account_status) {
+                  accountStatus = profile.account_status as AccountStatus;
                 }
               }
             } catch (e) {
@@ -115,7 +131,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               createdAt: session.user.created_at,
               token: session.access_token,
               onboardingCompleted,
-              hasUploadedCv: metadata.has_uploaded_cv ?? false
+              hasUploadedCv: metadata.has_uploaded_cv ?? false,
+              role,
+              accountStatus,
             };
 
             saveUserState(parsedUser);
@@ -158,11 +176,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           let onboardingCompleted = metadata.onboarding_completed ?? false;
           let avatarUrl = metadata.avatar_url || metadata.picture || null;
           let fullName = resolvedName;
+          let role: UserRole = 'user';
+          let accountStatus: AccountStatus = 'active';
 
           try {
             const { data: profile } = await supabase
               .from('profiles')
-              .select('*')
+              .select('full_name, onboarding_completed, avatar_url, role, account_status')
               .eq('id', session.user.id)
               .maybeSingle();
 
@@ -175,6 +195,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
               if (profile.avatar_url) {
                 avatarUrl = profile.avatar_url;
+              }
+              if (profile.role) {
+                role = profile.role as UserRole;
+              }
+              if (profile.account_status) {
+                accountStatus = profile.account_status as AccountStatus;
               }
             }
           } catch (e) {
@@ -189,7 +215,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             targetRole: metadata.target_role,
             token: session.access_token,
             onboardingCompleted,
-            hasUploadedCv: metadata.has_uploaded_cv ?? false
+            hasUploadedCv: metadata.has_uploaded_cv ?? false,
+            role,
+            accountStatus,
           };
 
           saveUserState(authenticatedUser);
@@ -337,6 +365,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try {
             await supabase.from('profiles').upsert({
               id: data.user.id,
+              email: data.user.email || email,
               full_name: resolvedName,
               avatar_url: null,
               onboarding_completed: false,
@@ -443,63 +472,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Interactive Social Login / Custom Account Chooser Login
-  const loginWithSocialAccount = async ({
-    fullName,
-    email,
-    avatarUrl = null,
-    provider = 'google'
-  }: {
-    fullName: string;
-    email: string;
-    avatarUrl?: string | null;
-    provider?: 'google' | 'linkedin';
-  }) => {
-    const cleanEmail = email.toLowerCase().trim();
-    const cleanName = fullName.trim() || resolveDisplayName({ email: cleanEmail });
-
-    // Check if user previously completed onboarding
-    let onboardingCompleted = false;
-    try {
-      const storedOnboarding = localStorage.getItem(`3watly_onboarding_${cleanEmail}`);
-      if (storedOnboarding === 'true') {
-        onboardingCompleted = true;
-      }
-    } catch {}
-
-    let resolvedAvatar = avatarUrl || null;
-    const supabase = createClient();
-
-    if (supabase) {
-      try {
-        const { data: existing } = await supabase
-          .from('profiles')
-          .select('avatar_url, onboarding_completed, full_name')
-          .ilike('id', `%${cleanEmail}%`)
-          .maybeSingle();
-
-        if (existing?.avatar_url) {
-          resolvedAvatar = existing.avatar_url;
-        }
-        if (existing?.onboarding_completed !== undefined) {
-          onboardingCompleted = existing.onboarding_completed;
-        }
-      } catch (e) {}
-    }
-
-    const socialUser: User = {
-      id: `${provider}-${Date.now()}`,
-      email: cleanEmail,
-      fullName: cleanName,
-      avatarUrl: resolvedAvatar,
-      token: `${provider}-token-${Date.now()}`,
-      onboardingCompleted,
-      hasUploadedCv: false
-    };
-
-    saveUserState(socialUser);
-    return { success: true, onboardingCompleted };
-  };
 
   const logout = async () => {
     const supabase = createClient();
@@ -510,13 +482,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn('Supabase signOut warning:', e);
       }
     }
+    
+    // Clear only session tokens and active user, preserving user-scoped CV and preferences
     setUser(null);
     localStorage.removeItem('3watly_user');
     localStorage.removeItem('3watly_token');
-    localStorage.removeItem('3watly_parsed_cv');
-    localStorage.removeItem('3watly_role');
     localStorage.removeItem('majra_user');
     localStorage.removeItem('majra_token');
+    localStorage.removeItem('3watly_cv_draft');
   };
 
   // Upload Avatar to permanent Supabase Storage & Profile table
@@ -623,6 +596,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateExperience = async (experience: string) => {
+    if (!user) return;
+    const updated = { ...user, experience };
+    saveUserState(updated);
+
+    const supabase = createClient();
+    if (supabase && user.id) {
+      try {
+        await supabase.auth.updateUser({
+          data: { experience }
+        });
+        await supabase.from('profiles').upsert({
+          id: user.id,
+          experience,
+          updated_at: new Date().toISOString()
+        });
+      } catch (e) {
+        console.warn('Supabase experience update error:', e);
+      }
+    }
+  };
+
   const setOnboardingCompleted = async (completed: boolean) => {
     if (!user) return;
     const updated = { ...user, onboardingCompleted: completed };
@@ -691,22 +686,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const isOwner = user?.role === 'owner';
+  const isAdmin = user?.role === 'admin' || isOwner;
+
   return (
     <AuthContext.Provider
       value={{
         user,
         loading,
+        isAdmin,
+        isOwner,
         login,
         signup,
         resetPassword,
         signInWithGoogle,
         signInWithLinkedIn,
-        loginWithSocialAccount,
         logout,
         updateAvatar,
         removeAvatar,
         updateFullName,
         updateTargetRole,
+        updateExperience,
         setOnboardingCompleted,
         deleteAccount
       }}

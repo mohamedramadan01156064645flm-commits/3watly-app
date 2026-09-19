@@ -30,7 +30,9 @@ export const allSkills: SkillBar[] = [
 export type Industry = {
   id: string;
   label: string;
+  labelAr: string;
   description: string;
+  descriptionAr: string;
   jobs: number;
   companies: number;
   remote: number;
@@ -42,7 +44,9 @@ export const industries: Industry[] = [
 {
   id: 'tech',
   label: 'Tech & Software',
+  labelAr: 'التقنية والبرمجيات',
   description: 'Product, data and platform engineering',
+  descriptionAr: 'هندسة المنتجات، البيانات، وهندسة المنصات',
   jobs: 12842,
   companies: 1246,
   remote: 38.4,
@@ -52,7 +56,9 @@ export const industries: Industry[] = [
 {
   id: 'finance',
   label: 'Finance & Banking',
+  labelAr: 'المالية والبنوك',
   description: 'Banks, fintech and insurance',
+  descriptionAr: 'البنوك، التكنولوجيا المالية، والتأمين',
   jobs: 7310,
   companies: 684,
   remote: 24.1,
@@ -62,7 +68,9 @@ export const industries: Industry[] = [
 {
   id: 'healthcare',
   label: 'Healthcare & Pharma',
+  labelAr: 'الرعاية الصحية والأدوية',
   description: 'Providers, pharma and health tech',
+  descriptionAr: 'المستشفيات، شركات الأدوية، والتكنولوجيا الصحية',
   jobs: 3985,
   companies: 412,
   remote: 18.6,
@@ -72,7 +80,9 @@ export const industries: Industry[] = [
 {
   id: 'ecommerce',
   label: 'Retail & E-commerce',
+  labelAr: 'التجارة الإلكترونية والتجزئة',
   description: 'Marketplaces, retail and logistics',
+  descriptionAr: 'الأسواق الرقمية، البيع بالتجزئة، واللوجستيات',
   jobs: 6120,
   companies: 903,
   remote: 31.2,
@@ -82,7 +92,9 @@ export const industries: Industry[] = [
 {
   id: 'telecom',
   label: 'Telecom & Networking',
+  labelAr: 'الاتصالات والشبكات',
   description: 'Operators, ISPs and network vendors',
+  descriptionAr: 'مشغلو الاتصالات، مزودو الإنترنت، والشبكات',
   jobs: 4470,
   companies: 268,
   remote: 21.7,
@@ -94,23 +106,27 @@ export const industries: Industry[] = [
 export type Region = {
   id: string;
   label: string;
+  labelAr: string;
   description: string;
+  descriptionAr: string;
   scale: number;
   remoteAdj: number;
 };
 
 export const regions: Region[] = [
-{ id: 'cairo-alex', label: 'Greater Cairo & Alexandria', description: 'Cairo, Giza, Alexandria', scale: 1, remoteAdj: 0 },
-{ id: 'cairo', label: 'Greater Cairo only', description: 'Cairo & Giza', scale: 0.74, remoteAdj: -1.8 },
-{ id: 'delta', label: 'Delta & Canal Cities', description: 'Mansoura, Tanta, Port Said', scale: 0.28, remoteAdj: 6.4 },
-{ id: 'upper', label: 'Upper Egypt', description: 'Assiut, Sohag, Luxor', scale: 0.16, remoteAdj: 9.1 },
-{ id: 'all-egypt', label: 'All Egypt', description: 'Every governorate', scale: 1.36, remoteAdj: 2.2 }];
+{ id: 'cairo-alex', label: 'Greater Cairo & Alexandria', labelAr: 'القاهرة الكبرى والإسكندرية', description: 'Cairo, Giza, Alexandria', descriptionAr: 'القاهرة، الجيزة، الإسكندرية', scale: 1, remoteAdj: 0 },
+{ id: 'cairo', label: 'Greater Cairo only', labelAr: 'القاهرة الكبرى فقط', description: 'Cairo & Giza', descriptionAr: 'القاهرة والجيزة', scale: 0.74, remoteAdj: -1.8 },
+{ id: 'delta', label: 'Delta & Canal Cities', labelAr: 'الدلتا ومدن القناة', description: 'Mansoura, Tanta, Port Said', descriptionAr: 'المنصورة، طنطا، بورسعيد', scale: 0.28, remoteAdj: 6.4 },
+{ id: 'upper', label: 'Upper Egypt', labelAr: 'صعيد مصر', description: 'Assiut, Sohag, Luxor', descriptionAr: 'أسيوط، سوهاج، الأقصر', scale: 0.16, remoteAdj: 9.1 },
+{ id: 'all-egypt', label: 'All Egypt', labelAr: 'كافة محافظات مصر', description: 'Every governorate', descriptionAr: 'جميع المحافظات', scale: 1.36, remoteAdj: 2.2 }];
 
 
 export type Timeframe = {
   id: string;
   label: string;
+  labelAr: string;
   description: string;
+  descriptionAr: string;
   scale: number;
   ticks: string[];
   peaks: {ai: number;docker: number;avg: number;};
@@ -120,7 +136,9 @@ export const timeframes: Timeframe[] = [
 {
   id: '30',
   label: 'Last 30 Days',
+  labelAr: 'آخر 30 يوماً',
   description: 'Rolling month',
+  descriptionAr: 'الشهر الجاري',
   scale: 0.37,
   ticks: ['Jul 1', 'Jul 5', 'Jul 10', 'Jul 15', 'Jul 20', 'Jul 25', 'Jul 29'],
   peaks: { ai: 17, docker: 9, avg: 3 }
@@ -128,7 +146,9 @@ export const timeframes: Timeframe[] = [
 {
   id: '90',
   label: 'Last 90 Days',
+  labelAr: 'آخر 90 يوماً',
   description: 'Rolling quarter',
+  descriptionAr: 'الربع السنوي الجاري',
   scale: 1,
   ticks: ['May 6', 'May 20', 'Jun 3', 'Jun 17', 'Jul 1', 'Jul 15', 'Jul 29'],
   peaks: { ai: 45, docker: 24, avg: 8 }
@@ -136,7 +156,9 @@ export const timeframes: Timeframe[] = [
 {
   id: '180',
   label: 'Last 6 Months',
+  labelAr: 'آخر 6 أشهر',
   description: 'Half-year trend',
+  descriptionAr: 'الاتجاه نصف السنوي',
   scale: 1.92,
   ticks: ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'],
   peaks: { ai: 63, docker: 33, avg: 11 }
@@ -144,7 +166,9 @@ export const timeframes: Timeframe[] = [
 {
   id: '365',
   label: 'Last 12 Months',
+  labelAr: 'آخر 12 شهراً',
   description: 'Year over year',
+  descriptionAr: 'المقارنة السنوية',
   scale: 3.6,
   ticks: ['Sep', 'Oct', 'Dec', 'Feb', 'Apr', 'Jun', 'Jul'],
   peaks: { ai: 82, docker: 41, avg: 15 }

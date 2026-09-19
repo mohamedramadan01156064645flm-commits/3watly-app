@@ -37,20 +37,20 @@ export function ScoreOverview({ analysis, runKey }: ScoreOverviewProps) {
               {isAr ? analysis.descriptionAr : analysis.description}
             </p>
             <div
-              className={`mt-4 inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 ${colors.soft} dark:bg-emerald-950/40 ${colors.border} dark:border-emerald-800/40`}
+              className={`mt-4 inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 ${colors.soft} dark:bg-slate-800/60 ${colors.border}`}
             >
-              <TrendingUp className={`h-4 w-4 ${colors.text} dark:text-emerald-400`} aria-hidden="true" />
-              <span className={`text-[13px] font-bold ${colors.text} dark:text-emerald-300`}>
+              <TrendingUp className={`h-4 w-4 ${colors.text}`} aria-hidden="true" />
+              <span className={`text-[13px] font-bold ${colors.text}`}>
                 {isAr
-                  ? `أفضل ${analysis.percentile}% من المتقدمين لوظائف ${analysis.keywords.role}`
-                  : `Top ${analysis.percentile}% of candidates in ${analysis.keywords.role} roles`}
+                  ? `مستوى التوافق: ${analysis.bandLabelAr}`
+                  : `Readiness Level: ${analysis.bandLabel}`}
               </span>
               <InfoTip
                 align={isAr ? "left" : "right"}
                 label={
                   isAr
-                    ? `مقارنة مع سير ذاتية لوظائف ${analysis.keywords.role} في السوق المصري خلال الـ 90 يوماً الماضية.`
-                    : `Benchmarked against ${analysis.keywords.role} CVs in the Egyptian market over the last 90 days.`
+                    ? `تقييم مبني على معايير قراءة وتوافق أنظمة تتبع المتقدمين (ATS) لهيكل السيرة الذاتية والكلمات المفتاحية.`
+                    : `Evaluated against standard Applicant Tracking System (ATS) structure, parsing, and keyword criteria.`
                 }
               />
             </div>

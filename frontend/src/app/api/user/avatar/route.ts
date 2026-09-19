@@ -1,18 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireUser } from '@/lib/auth/requireUser';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function detectImageMimeType(buffer: Buffer): string | null {
+  if (buffer.length < 12) return null;
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  ) {
+    return 'image/png';
+  }
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  // GIF: 47 49 46 38 (GIF87a or GIF89a)
+  if (
+    buffer[0] === 0x47 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x38
+  ) {
+    return 'image/gif';
+  }
+  // WebP: RIFF....WEBP (52 49 46 46 .... 57 45 42 50)
+  if (
+    buffer[0] === 0x52 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x46 &&
+    buffer[8] === 0x57 &&
+    buffer[9] === 0x45 &&
+    buffer[10] === 0x42 &&
+    buffer[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+
+  return null;
+}
 
 export async function POST(request: NextRequest) {
   try {
+    // 1. Authenticate user via verified cookie session only
+    const { user, errorResponse } = await requireUser();
+    if (errorResponse) {
+      return errorResponse;
+    }
+
+    const userId = user.id;
+    if (!UUID_REGEX.test(userId)) {
+      return NextResponse.json({ error: 'Invalid user identifier.' }, { status: 400 });
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const bodyUserId = formData.get('userId') as string | null;
 
     if (!file) {
       return NextResponse.json({ error: 'No image file provided.' }, { status: 400 });
@@ -22,63 +77,64 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Image size exceeds maximum limit of 5MB.' }, { status: 400 });
     }
 
-    const mimeType = file.type.toLowerCase();
-    if (!ALLOWED_TYPES.includes(mimeType) && !file.name.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
+    const arrayBuffer = await file.arrayBuffer();
+    const fileBuffer = Buffer.from(arrayBuffer);
+
+    // 2. Validate magic bytes (prevent file-type spoofing)
+    const detectedMime = detectImageMimeType(fileBuffer);
+    if (!detectedMime) {
       return NextResponse.json(
-        { error: 'Invalid file format. Please upload a PNG, JPG, JPEG, or WEBP image.' },
+        { error: 'Invalid file content. Please upload a valid PNG, JPEG, GIF, or WebP image.' },
         { status: 400 }
       );
     }
 
-    // Step 1: Resolve Authenticated User ID
-    let userId: string | null = null;
-    const supabase = await createClient();
-
-    if (supabase) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          userId = user.id;
-        }
-      } catch (e) {
-        console.warn('Session resolution notice in avatar upload:', e);
-      }
-    }
-
-    if (!userId && bodyUserId) {
-      userId = bodyUserId.trim();
-    }
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized. User ID required.' }, { status: 401 });
-    }
-
-    // Step 2: Upload to Supabase Storage using Admin Service Role Client
+    // 3. Initialize Admin Supabase Client
     const adminSupabase = createAdminClient();
     if (!adminSupabase) {
       return NextResponse.json({ error: 'Storage service unavailable.' }, { status: 503 });
     }
 
-    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'png';
-    const filePath = `${userId}/avatar-${Date.now()}.${fileExt}`;
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
+    // 4. Clean up existing avatars for this user
+    try {
+      const { data: existingFiles } = await adminSupabase.storage
+        .from('avatars')
+        .list(userId, { limit: 20 });
+
+      if (existingFiles && existingFiles.length > 0) {
+        const filesToRemove = existingFiles.map((f) => `${userId}/${f.name}`);
+        await adminSupabase.storage.from('avatars').remove(filesToRemove);
+      }
+    } catch (cleanupErr) {
+      console.warn('Notice: non-critical error during previous avatar cleanup:', cleanupErr);
+    }
+
+    // 5. Upload with safe derived extension & contentType
+    const extMap: Record<string, string> = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/gif': 'gif',
+      'image/webp': 'webp',
+    };
+    const safeExt = extMap[detectedMime] || 'png';
+    const filePath = `${userId}/avatar-${Date.now()}.${safeExt}`;
 
     const { error: uploadError } = await adminSupabase.storage
       .from('avatars')
       .upload(filePath, fileBuffer, {
-        contentType: mimeType || 'image/png',
+        contentType: detectedMime,
         upsert: true,
       });
 
     if (uploadError) {
       console.error('Supabase storage upload error:', uploadError);
       return NextResponse.json(
-        { error: `Storage upload failed: ${uploadError.message}` },
+        { error: 'Storage upload failed. Please try again.' },
         { status: 500 }
       );
     }
 
-    // Step 3: Get Permanent Public CDN URL
+    // 6. Get Permanent Public CDN URL
     const { data: { publicUrl } } = adminSupabase.storage
       .from('avatars')
       .getPublicUrl(filePath);
@@ -87,7 +143,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to retrieve public avatar URL.' }, { status: 500 });
     }
 
-    // Step 4: Persist URL to profiles table
+    // 7. Persist URL to profiles table
     try {
       await adminSupabase.from('profiles').upsert({
         id: userId,
@@ -98,13 +154,13 @@ export async function POST(request: NextRequest) {
       console.warn('Warning updating profiles table:', dbErr);
     }
 
-    // Step 5: Update auth user metadata
+    // 8. Update auth user metadata
     try {
       await adminSupabase.auth.admin.updateUserById(userId, {
         user_metadata: { avatar_url: publicUrl },
       });
     } catch (authErr) {
-      // Ignored if user is non-auth ID
+      console.warn('Warning updating user metadata:', authErr);
     }
 
     return NextResponse.json({
@@ -114,52 +170,55 @@ export async function POST(request: NextRequest) {
     });
   } catch (err: unknown) {
     console.error('Error in POST /api/user/avatar:', err);
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'An unexpected error occurred while processing avatar.' }, { status: 500 });
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE() {
   try {
-    let userId: string | null = null;
-    const supabase = await createClient();
-
-    if (supabase) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          userId = user.id;
-        }
-      } catch (e) {}
+    // 1. Authenticate user via verified cookie session only
+    const { user, errorResponse } = await requireUser();
+    if (errorResponse) {
+      return errorResponse;
     }
 
-    if (!userId) {
-      const q = request.nextUrl.searchParams.get('userId');
-      if (q) userId = q.trim();
-    }
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-    }
-
+    const userId = user.id;
     const adminSupabase = createAdminClient();
-    if (adminSupabase) {
-      // Update database profile
-      try {
-        await adminSupabase.from('profiles').update({
-          avatar_url: null,
-          updated_at: new Date().toISOString(),
-        }).eq('id', userId);
-      } catch (e) {
-        console.warn('Error clearing profile avatar:', e);
-      }
+    if (!adminSupabase) {
+      return NextResponse.json({ error: 'Storage service unavailable.' }, { status: 503 });
+    }
 
-      // Update auth user metadata
-      try {
-        await adminSupabase.auth.admin.updateUserById(userId, {
-          user_metadata: { avatar_url: null },
-        });
-      } catch (e) {}
+    // 2. Remove avatar files from storage
+    try {
+      const { data: existingFiles } = await adminSupabase.storage
+        .from('avatars')
+        .list(userId, { limit: 20 });
+
+      if (existingFiles && existingFiles.length > 0) {
+        const filesToRemove = existingFiles.map((f) => `${userId}/${f.name}`);
+        await adminSupabase.storage.from('avatars').remove(filesToRemove);
+      }
+    } catch (e) {
+      console.warn('Notice removing avatar storage objects:', e);
+    }
+
+    // 3. Update database profile
+    try {
+      await adminSupabase.from('profiles').update({
+        avatar_url: null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', userId);
+    } catch (e) {
+      console.warn('Error clearing profile avatar:', e);
+    }
+
+    // 4. Update auth user metadata
+    try {
+      await adminSupabase.auth.admin.updateUserById(userId, {
+        user_metadata: { avatar_url: null },
+      });
+    } catch (e) {
+      console.warn('Error clearing metadata avatar:', e);
     }
 
     return NextResponse.json({

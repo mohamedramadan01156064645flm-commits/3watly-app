@@ -163,6 +163,13 @@ const SKILL_BLACKLIST = new Set([
   'shift based', 'males only', 'females only', 'unspecified',
   'it/software', 'software', 'technology', 'tech',
   'yrs', 'years', 'year', 'months', 'month',
+  'medical/healthcare', 'media/journalism/publishing', 'logistics/supply chain',
+  'installation/maintenance/repair', 'r&d/science', 'strategy/consulting',
+  'engineering - oil & gas/energy', 'purchasing/procurement', 'sports and leisure',
+  'food & beverage', 'hospitality management',
+  'accounting/finance', 'administration', 'marketing/pr/advertising',
+  'sales/retail', 'customer service/support', 'senior management',
+  'senior full stack developer', 'executive/director', 'development', 'product', 'planning',
 ]);
 
 interface RoleSkillProfile {
@@ -261,19 +268,25 @@ function generateJobId(applyUrl: string): string {
 function cleanText(text: string): string {
   if (!text) return '';
   return text
-    .replace(/\.css-[a-zA-Z0-9_-]+\s*\{[^}]*\}/g, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/\.css-[a-zA-Z0-9_-]+\s*\{[^}]*\}/gi, '')
     .replace(/\{[^}]*\}/g, '')
-    .replace(/^\.css-[a-zA-Z0-9_-]+/g, '')
+    .replace(/^\.css-[a-zA-Z0-9_-]+/gi, '')
+    .replace(/\.css-[a-zA-Z0-9_-]+/gi, '')
+    .replace(/@media[^{]*\{[^}]*\}\s*\}/gi, '')
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 function normalizeSkill(raw: string): string | null {
-  const trimmed = (raw || '').trim();
-  if (!trimmed || trimmed.length < 2) return null;
-  const key = trimmed.toLowerCase().trim().replace(/\s+/g, ' ');
-  return SKILL_ALIASES[key] || trimmed;
+  const stripped = (raw || '')
+    .replace(/^[\s•●\-\*\t]+/, '')
+    .replace(/[:\s]+$/, '')
+    .trim();
+  if (!stripped || stripped.length < 2) return null;
+  const key = stripped.toLowerCase().replace(/\s+/g, ' ');
+  return SKILL_ALIASES[key] || stripped;
 }
 
 function deduplicateSkills(skills: string[]): string[] {
@@ -315,11 +328,31 @@ function inferSkillsFromTitle(title: string): ExtractedSkill[] {
 
 /** Extract verified skills from free text against known skill dictionary */
 function extractSkillsFromText(text: string): string[] {
+  if (!text) return [];
   const found = new Set<string>();
   const normalizedText = text.toLowerCase();
   for (const skill of KNOWN_TECH_SKILLS) {
+    if (skill === 'R') {
+      if (/(?:^|\s|\/|,)(?:r\s+programming|r\s+language|r\s+script|language\s+r|r-project|cran|rstudio|r\s*[\/,]\s*python|python\s*[\/,]\s*r)(?:$|\s|\/|,|\.)/i.test(normalizedText)) {
+        found.add('R');
+      }
+      continue;
+    }
+    if (skill === 'C') {
+      if (/(?:^|\s|\/|,)(?:c\s+programming|c\s+language|c\s*\/\s*c\+\+)(?:$|\s|\/|,|\.)/i.test(normalizedText)) {
+        found.add('C');
+      }
+      continue;
+    }
+    if (skill === 'Go') {
+      if (/(?:^|\s|\/|,)(?:golang|go\s+language|go\s+programming|go\s*\/\s*golang)(?:$|\s|\/|,|\.)/i.test(normalizedText)) {
+        found.add('Go');
+      }
+      continue;
+    }
+
     const escaped = skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(?<![a-zA-Z])${escaped}(?![a-zA-Z])`, 'i');
+    const regex = new RegExp(`(?<![a-zA-Z0-9])${escaped}(?![a-zA-Z0-9])`, 'i');
     if (regex.test(normalizedText)) {
       found.add(skill);
     }
@@ -347,7 +380,8 @@ function extractSalaryRange(text: string): string {
   if (!text) return 'تحدد أثناء المقابلة';
   const match = text.match(/(\d[\d,]*\s*(?:to|-|–)\s*\d[\d,]*\s*(?:EGP|USD|EUR|ج\.م|\$)[^\n•,]*)/i);
   if (match) {
-    return match[1].trim();
+    const rawSalary = match[1].replace(/(دوام كامل|دوام جزئي|عمل عن بعد|من مقر الشركة|Full Time|Part Time|Remote|On-site|Hybrid).*/i, '').trim();
+    return rawSalary || 'تحدد أثناء المقابلة';
   }
   return 'تحدد أثناء المقابلة';
 }
@@ -356,32 +390,26 @@ function extractSalaryRange(text: string): string {
 function parseRelativeDate(text: string): string | null {
   if (!text || !text.trim()) return null;
   const t = text.toLowerCase().trim();
-  const now = new Date();
+  const nowMs = Date.now(); // Always UTC milliseconds — no timezone involved
+
+  const minutesMatch = t.match(/(\d+)\s*(?:minute|minutes|min|mins|دقيقة|دقائق)/);
+  if (minutesMatch) return new Date(nowMs - parseInt(minutesMatch[1], 10) * 60_000).toISOString();
 
   const hoursMatch = t.match(/(\d+)\s*(?:hour|hours|hr|hrs|ساعة|ساعات)/);
-  if (hoursMatch) {
-    now.setHours(now.getHours() - parseInt(hoursMatch[1], 10));
-    return now.toISOString();
-  }
+  if (hoursMatch) return new Date(nowMs - parseInt(hoursMatch[1], 10) * 3_600_000).toISOString();
+
   const daysMatch = t.match(/(\d+)\s*(?:day|days|يوم|أيام)/);
-  if (daysMatch) {
-    now.setDate(now.getDate() - parseInt(daysMatch[1], 10));
-    return now.toISOString();
-  }
+  if (daysMatch) return new Date(nowMs - parseInt(daysMatch[1], 10) * 86_400_000).toISOString();
+
   const weeksMatch = t.match(/(\d+)\s*(?:week|weeks|أسبوع|أسابيع)/);
-  if (weeksMatch) {
-    now.setDate(now.getDate() - parseInt(weeksMatch[1], 10) * 7);
-    return now.toISOString();
-  }
+  if (weeksMatch) return new Date(nowMs - parseInt(weeksMatch[1], 10) * 7 * 86_400_000).toISOString();
+
   const monthsMatch = t.match(/(\d+)\s*(?:month|months|شهر|أشهر)/);
-  if (monthsMatch) {
-    now.setMonth(now.getMonth() - parseInt(monthsMatch[1], 10));
-    return now.toISOString();
-  }
-  if (/just now|الآن|اليوم|today/.test(t)) {
-    return now.toISOString();
-  }
-  // Cannot determine — return null, not a fake date
+  if (monthsMatch) return new Date(nowMs - parseInt(monthsMatch[1], 10) * 30 * 86_400_000).toISOString();
+
+  if (/yesterday|أمس/.test(t)) return new Date(nowMs - 86_400_000).toISOString();
+  if (/just now|الآن|اليوم|today/.test(t)) return new Date(nowMs - 600_000).toISOString();
+
   return null;
 }
 
@@ -433,13 +461,13 @@ function translateLocationToAr(location: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function extractTitle($card: ReturnType<CheerioAPI>): string | null {
-  // Priority: h2 > h3 > any heading > first anchor text
+  $card.find('style, script, noscript').remove();
   const title =
-    $card.find('h2').first().text().trim() ||
-    $card.find('h3').first().text().trim() ||
-    $card.find('[class*="title"] a, [class*="job-name"] a').first().text().trim() ||
-    $card.find('a[href*="/job/"]').first().text().trim();
-  return title && title.length >= 3 ? cleanText(title) : null;
+    cleanText($card.find('h2').first().text()) ||
+    cleanText($card.find('h3').first().text()) ||
+    cleanText($card.find('[class*="title"] a, [class*="job-name"] a').first().text()) ||
+    cleanText($card.find('a[href*="/job/"]').first().text());
+  return title && title.length >= 3 ? title : null;
 }
 
 function extractJobUrl($card: ReturnType<CheerioAPI>): string | null {
@@ -475,18 +503,19 @@ function extractJobUrl($card: ReturnType<CheerioAPI>): string | null {
 }
 
 function extractCompany($: CheerioAPI, $card: ReturnType<CheerioAPI>): string | null {
+  $card.find('style, script, noscript').remove();
   // 1. Company page link text
-  let company = $card.find('a[href*="/jobs/careers/"]').first().text().trim();
+  let company = cleanText($card.find('a[href*="/jobs/careers/"]').first().text());
   // 2. Image alt text
   if (!company || company.length < 2) {
     const alt = $card.find('img[alt*="Jobs and Careers"]').attr('alt') || '';
-    if (alt) company = alt.replace(/^Jobs and Careers at /i, '').replace(/ Egypt$/i, '').trim();
+    if (alt) company = cleanText(alt.replace(/^Jobs and Careers at /i, '').replace(/ Egypt$/i, ''));
   }
   // 3. Career URL slug
   if (!company || company.length < 2) {
     const careerHref = $card.find('a[href*="/jobs/careers/"]').attr('href') || '';
     const m = careerHref.match(/careers\/(.*?)(?:-Egypt)?-\d+/);
-    if (m?.[1]) company = decodeURIComponent(m[1].replace(/-/g, ' '));
+    if (m?.[1]) company = cleanText(decodeURIComponent(m[1].replace(/-/g, ' ')));
   }
   // 4. Only mark Confidential if page actually says so
   if (!company || company.length < 2) {
@@ -495,10 +524,11 @@ function extractCompany($: CheerioAPI, $card: ReturnType<CheerioAPI>): string | 
     return null; // Unknown, don't fake it
   }
   // Clean trailing location suffixes
-  return company
-    .replace(/\s*[-–—]\s*(?:New Cairo|Cairo|Giza|Alexandria|Smart Village|Maadi|Nasr City|6th of October|Dokki|Heliopolis|Egypt|مصر).*$/i, '')
-    .replace(/[-–—]$/, '')
-    .trim() || null;
+  return cleanText(
+    company
+      .replace(/\s*[-–—]\s*(?:New Cairo|Cairo|Giza|Alexandria|Smart Village|Maadi|Nasr City|6th of October|Dokki|Heliopolis|Egypt|مصر).*$/i, '')
+      .replace(/[-–—]$/, '')
+  ) || null;
 }
 
 function extractCompanyLogo($card: ReturnType<CheerioAPI>): string | null {
@@ -510,6 +540,7 @@ function extractCompanyLogo($card: ReturnType<CheerioAPI>): string | null {
 }
 
 function extractLocation($card: ReturnType<CheerioAPI>): string {
+  $card.find('style, script, noscript').remove();
   // semantic: look for location link or span
   const locText =
     $card.find('a[href*="location="], a[href*="city="]').first().text().trim() ||
@@ -521,12 +552,12 @@ function extractWorkTypeBadges($card: ReturnType<CheerioAPI>): string[] {
   const badges: string[] = [];
   // URL-based badges are stable across Wuzzuf HTML changes
   $card.find('a[href*="Full-Time"], a[href*="Part-Time"], a[href*="Remote"], a[href*="On-Site"], a[href*="Hybrid"], a[href*="job-type"]').each((_, el) => {
-    const t = $card.find(el).text().trim();
+    const t = cleanText($card.find(el).text());
     if (t) badges.push(t);
   });
   // Seniority / experience links
   $card.find('a[href*="experience="], a[href*="level="]').each((_, el) => {
-    const t = $card.find(el).text().trim();
+    const t = cleanText($card.find(el).text());
     if (t) badges.push(t);
   });
   return badges;
@@ -537,7 +568,7 @@ function extractSkillTags($card: ReturnType<CheerioAPI>): string[] {
   const tags: string[] = [];
   // Wuzzuf skill filter links are stable: href contains skill name in URL
   $card.find('a[href*="-Jobs-in-Egypt"], a[href*="skills="], a[href*="skill="]').each((_, el) => {
-    const txt = $card.find(el).text().replace(/^[·\s]+/, '').trim();
+    const txt = cleanText($card.find(el).text().replace(/^[·\s]+/, ''));
     const lower = txt.toLowerCase();
     if (
       txt &&
@@ -551,7 +582,7 @@ function extractSkillTags($card: ReturnType<CheerioAPI>): string[] {
   // Fallback: legacy hash-based classes (fragile — last resort)
   if (tags.length === 0) {
     $card.find('.css-5x9pm1, .css-5x9545, [class*="css-5x9"]').each((_, el) => {
-      const txt = $card.find(el).text().replace(/^[·\s]+/, '').trim();
+      const txt = cleanText($card.find(el).text().replace(/^[·\s]+/, ''));
       if (txt && txt.length >= 2 && txt.length <= 35) tags.push(txt);
     });
   }
@@ -560,6 +591,7 @@ function extractSkillTags($card: ReturnType<CheerioAPI>): string[] {
 
 /** Multi-strategy date extraction — returns null if unknown (never fakes now) */
 function extractPostedDate($card: ReturnType<CheerioAPI>): string | null {
+  $card.find('style, script, noscript').remove();
   // 1. Standard <time datetime="..."> attribute (most reliable)
   const timeEl = $card.find('time').first();
   if (timeEl.length) {
@@ -572,20 +604,22 @@ function extractPostedDate($card: ReturnType<CheerioAPI>): string | null {
     if (parsed) return parsed;
   }
 
-  // 2. Scan all text nodes for relative date patterns
-  const allTexts = $card.find('*').toArray()
-    .map(el => $card.find(el).clone().children().remove().end().text().trim())
-    .filter(Boolean);
-  const relativeText = allTexts.find(t =>
-    /(\d+\s*(minute|hour|day|week|month)s?\s*ago)|منذ\s*\d+/i.test(t)
-  );
-  if (relativeText) return parseRelativeDate(relativeText);
+  // 2. Scan direct text nodes for relative date patterns
+  let found: string | null = null;
+  $card.find('div, span, p').each((_, el) => {
+    if (found) return;
+    const txt = cleanText($card.find(el).clone().children().remove().end().text());
+    if (/(?:minute|hour|day|week|month|ago|منذ|أمس|yesterday|just now)/i.test(txt)) {
+      found = parseRelativeDate(txt);
+    }
+  });
+  if (found) return found;
 
-  // 3. Hash-class fallback (unreliable but better than nothing)
-  const dateText = $card.find('[class*="date"], [class*="time"], [class*="posted"], [class*="css-1jldrig"], [class*="css-do2t5m"]').first().text().trim();
-  if (dateText) return parseRelativeDate(dateText);
+  // 3. Fallback to full card text
+  const cardText = cleanText($card.text());
+  const match = cardText.match(/(?:posted\s*)?(\d+\s*(?:minute|hour|day|week|month)s?\s*ago|just now|yesterday)/i);
+  if (match) return parseRelativeDate(match[1]);
 
-  // Unknown — store null, not new Date()
   return null;
 }
 
@@ -790,6 +824,140 @@ async function enrichJobWithDetails(job: ScrapedJob): Promise<ScrapedJob> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Category & Browse Pages (Bypasses Cloudflare block, high job yield)
+// ─────────────────────────────────────────────────────────────────────────────
+const WUZZUF_CATEGORIES = [
+  { slug: 'Jobs-in-Egypt', label: 'All Recent Jobs (Latest Egypt Feed)', maxPages: 6 },
+  { slug: 'Software-Development-Jobs-in-Egypt', label: 'Software Development', maxPages: 5 },
+  { slug: 'Engineering-Technology-Jobs-in-Egypt', label: 'Engineering & Technology', maxPages: 5 },
+  { slug: 'Data-Analysis-Jobs-in-Egypt', label: 'Data Analysis & BI', maxPages: 5 },
+  { slug: 'Frontend-Developer-Jobs-in-Egypt', label: 'Frontend Development', maxPages: 4 },
+  { slug: 'Project-Management-Jobs-in-Egypt', label: 'Project Management & Scrum', maxPages: 4 },
+  { slug: 'Software-Engineering-Jobs-in-Egypt', label: 'Software Engineering', maxPages: 4 },
+  { slug: 'Quality-Assurance-Jobs-in-Egypt', label: 'QA & Testing', maxPages: 4 },
+  { slug: 'Technology-Jobs-in-Egypt', label: 'Technology', maxPages: 4 },
+  { slug: 'Data-Analyst', label: 'Data Analyst Specific', maxPages: 3 },
+  { slug: 'Business-Intelligence', label: 'Business Intelligence Specific', maxPages: 3 },
+  { slug: 'Data-Engineer', label: 'Data Engineer Specific', maxPages: 3 },
+  { slug: 'Data-Scientist', label: 'Data Scientist Specific', maxPages: 3 },
+  { slug: 'Python', label: 'Python Specific', maxPages: 3 },
+  { slug: 'SQL', label: 'SQL & Database Specific', maxPages: 3 },
+];
+
+async function scrapeWuzzufCategory(categorySlug: string, maxPages = 3): Promise<ScrapedJob[]> {
+  const jobs: ScrapedJob[] = [];
+  const pathSlug = categorySlug.endsWith('-Jobs-in-Egypt') || categorySlug === 'Jobs-in-Egypt'
+    ? categorySlug
+    : `${categorySlug}-Jobs-in-Egypt`;
+
+  for (let page = 0; page < maxPages; page++) {
+    const url = `${WUZZUF_BASE}/a/${pathSlug}?start=${page}`;
+    const html = await fetchWithRetry(url, 2);
+    if (!html) continue;
+
+    try {
+      const $ = cheerio.load(html);
+      $('style, script, noscript').remove();
+
+      const jobLinks = $('a[href*="/jobs/p/"], a[href*="/job/"]');
+      const seenUrls = new Set<string>();
+      const cardElements: ReturnType<CheerioAPI>[] = [];
+
+      jobLinks.each((_, link) => {
+        const href = $(link).attr('href');
+        if (!href) return;
+        const fullUrl = href.startsWith('http') ? href : `${WUZZUF_BASE}${href}`;
+        if (seenUrls.has(fullUrl)) return;
+        const container = $(link).closest('article, li, section, div.job-card-wuzzuf, [class*="css-1gatmva"], [class*="css-pkv5jc"]');
+        if (container.length && container.find('h2, h3').length) {
+          seenUrls.add(fullUrl);
+          cardElements.push(container);
+        }
+      });
+
+      for (const cardEl of cardElements) {
+        try {
+          const $card = $(cardEl);
+          if (!isValidJobCard($card)) continue;
+
+          const title = extractTitle($card);
+          const applyUrl = extractJobUrl($card);
+          if (!title || !applyUrl) continue;
+
+          const company = extractCompany($, $card) || 'Confidential Employer';
+          const companyLogo = extractCompanyLogo($card);
+          const location = extractLocation($card);
+          const workTypeBadges = extractWorkTypeBadges($card);
+          const badgeText = workTypeBadges.join(' ');
+          const { workType, isRemote } = parseWorkType(badgeText + ' ' + location);
+          const seniority = parseSeniority(badgeText + ' ' + title);
+
+          const rawSkillTags = extractSkillTags($card);
+          const titleSkills = inferSkillsFromTitle(title);
+          const descSkills = extractSkillsFromText($card.text());
+
+          const verifiedFromTags = deduplicateSkills([...rawSkillTags, ...descSkills]);
+          const inferredSkillNames = titleSkills
+            .map(s => s.name)
+            .filter(name => !verifiedFromTags.includes(name));
+
+          const skillSources: SkillSource[] = [];
+          if (rawSkillTags.length > 0) skillSources.push('job_tags');
+          if (descSkills.length > 0 && !skillSources.includes('job_tags')) skillSources.push('job_description');
+          if (inferredSkillNames.length > 0) skillSources.push('title_inference');
+
+          const postedAt = extractPostedDate($card);
+
+          const partial: Partial<ScrapedJob> = {
+            required_skills: verifiedFromTags,
+            inferred_skills: inferredSkillNames,
+            posted_at: postedAt,
+            company,
+          };
+          const dataQuality = classifyDataQuality(partial);
+
+          const job: ScrapedJob = {
+            id: generateJobId(applyUrl),
+            title,
+            title_ar: translateTitleToAr(title),
+            company,
+            company_ar: company,
+            company_logo: companyLogo,
+            location,
+            location_ar: translateLocationToAr(location),
+            work_type: workType,
+            is_remote: isRemote,
+            seniority,
+            salary_range: extractSalaryRange($card.text()),
+            required_skills: verifiedFromTags,
+            inferred_skills: inferredSkillNames,
+            preferred_skills: [],
+            skill_source: skillSources,
+            data_quality: dataQuality,
+            description: `Exciting opportunity for a ${title} position at ${company ?? 'a leading company'} in ${location}.`,
+            description_ar: `فرصة عمل في ${company ?? 'شركة رائدة'} — ${translateTitleToAr(title)} (${translateLocationToAr(location)})`,
+            requirements: verifiedFromTags.slice(0, 4).map(s => `• Experience with ${s}`).join('\n'),
+            requirements_ar: verifiedFromTags.slice(0, 4).map(s => `• خبرة في ${s}`).join('\n'),
+            apply_url: applyUrl,
+            source: 'wuzzuf',
+            posted_at: postedAt,
+            last_enriched_at: null,
+          };
+
+          jobs.push(job);
+        } catch { /* skip bad card, continue */ }
+      }
+
+      await new Promise(r => setTimeout(r, 600 + Math.random() * 300));
+    } catch (e: any) {
+      console.warn(`[WuzzufScraper] Error parsing category "${categorySlug}" page ${page}:`, e.message);
+    }
+  }
+
+  return jobs;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Listing Page Scraper
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -803,6 +971,7 @@ async function scrapeWuzzufQuery(query: string, maxPages = 2): Promise<ScrapedJo
 
     try {
       const $ = cheerio.load(html);
+      $('style, script, noscript').remove();
 
       // ── Card Detection via job link proximity (semantic, not class-hash-based) ──
       const jobLinks = $('a[href*="/job/"], a[href*="/jobs/p/"]');
@@ -924,7 +1093,24 @@ export async function runWuzzufScraper(): Promise<ScraperHealthReport> {
 
   console.log('[WuzzufScraper] Starting multi-category scraping run...');
 
-  // ── Phase 1: Listing Pages ──
+  // ── Phase 1A: Browse & Category Pages (High Yield Tech Roles) ──
+  for (const cat of WUZZUF_CATEGORIES) {
+    try {
+      const catJobs = await scrapeWuzzufCategory(cat.slug, cat.maxPages);
+      for (const job of catJobs) {
+        const existing = allScrapedMap.get(job.id);
+        if (!existing || QUALITY_RANK[job.data_quality] >= QUALITY_RANK[existing.data_quality]) {
+          allScrapedMap.set(job.id, job);
+        }
+      }
+      console.log(`[WuzzufScraper] Category "${cat.label}" → ${catJobs.length} jobs (unique total: ${allScrapedMap.size})`);
+      await new Promise(r => setTimeout(r, 600 + Math.random() * 300));
+    } catch (e: any) {
+      errors.push(`Category "${cat.slug}": ${e.message}`);
+    }
+  }
+
+  // ── Phase 1B: Listing Pages (Keywords) ──
   for (const query of SEARCH_QUERIES) {
     try {
       const queryJobs = await scrapeWuzzufQuery(query, 2);

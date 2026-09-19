@@ -64,13 +64,19 @@ export function StatCards({ stats, onSelect }: StatCardsProps) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-4.5">
-      {cards.map((card) => (
-        <button
-          key={card.id}
-          type="button"
-          onClick={() => onSelect(card.id)}
-          className="rounded-[22px] border border-slate-200/90 dark:border-white/10 bg-white dark:bg-[#0B1120] p-4 sm:p-4.5 xl:p-5 shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-md hover:border-blue-400/60 dark:hover:border-blue-500/40 transition-all flex items-center justify-between gap-2.5 sm:gap-3 xl:gap-3.5 cursor-pointer group text-left rtl:text-right min-w-0"
-        >
+      {cards.map((card) => {
+        const isClickable = card.id === 'jobs' || card.id === 'skill';
+        const Tag = isClickable ? 'button' : 'div';
+        return (
+          <Tag
+            key={card.id}
+            {...(isClickable ? { type: 'button', onClick: () => onSelect(card.id) } : {})}
+            className={`rounded-[22px] border border-slate-200/90 dark:border-white/10 bg-white dark:bg-[#0B1120] p-4 sm:p-4.5 xl:p-5 shadow-[0_2px_8px_rgba(0,0,0,0.03)] transition-all flex items-center justify-between gap-2.5 sm:gap-3 xl:gap-3.5 group text-left rtl:text-right min-w-0 ${
+              isClickable
+                ? 'cursor-pointer hover:shadow-md hover:border-blue-400/60 dark:hover:border-blue-500/40'
+                : 'cursor-default'
+            }`}
+          >
           <div className="flex items-center gap-2.5 sm:gap-3 xl:gap-3.5 min-w-0 flex-1">
             {/* Squircle Icon Box */}
             <div className={`flex h-10 w-10 sm:h-11 sm:w-11 xl:h-12 xl:w-12 shrink-0 items-center justify-center rounded-[14px] sm:rounded-2xl ${card.iconBg} ${card.iconColor} transition-transform group-hover:scale-105 shadow-2xs`}>
@@ -123,8 +129,9 @@ export function StatCards({ stats, onSelect }: StatCardsProps) {
               <span className="w-1 sm:w-1.5 xl:w-2 h-6.5 sm:h-8 rounded-full bg-[#F97316]" />
             </div>
           )}
-        </button>
-      ))}
+        </Tag>
+      );
+    })}
     </div>
   );
 }

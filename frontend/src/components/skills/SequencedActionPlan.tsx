@@ -2,16 +2,17 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Trophy, Clock, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Trophy, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { SkillIcon } from './SkillIcon';
 import { useLanguage } from '@/contexts/LanguageContext';
-import type { SkillPlan } from '@/types/skills';
+import type { PlannedSkill, SkillPlan } from '@/types/skills';
 
 interface SequencedActionPlanProps {
   plan: SkillPlan;
+  onSelectSkill?: (skill: PlannedSkill) => void;
 }
 
-export function SequencedActionPlan({ plan }: SequencedActionPlanProps) {
+export function SequencedActionPlan({ plan, onSelectSkill }: SequencedActionPlanProps) {
   const { isAr } = useLanguage();
 
   // Combine priorities and future gaps in logical sequential order
@@ -56,6 +57,7 @@ export function SequencedActionPlan({ plan }: SequencedActionPlanProps) {
         badgeClass,
         circleClass,
         modules: modulesText,
+        originalSkill: item,
       };
     });
   }, [plan, isAr]);
@@ -93,46 +95,51 @@ export function SequencedActionPlan({ plan }: SequencedActionPlanProps) {
             </p>
           </div>
         ) : (
-          /* Step Items Timeline (Clean and without broken floating arrows) */
-          <div className="mt-5 space-y-4 relative">
-            {sequenceSteps.slice(0, 5).map((item, idx, arr) => (
-              <div key={item.step} className="relative flex items-center justify-between group">
+          /* Step Items Timeline */
+          <div className="mt-5 space-y-4 relative max-h-[320px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 pe-1">
+            {sequenceSteps.map((item, idx, arr) => (
+              <div key={item.step} className="relative">
                 {/* Connected Line */}
                 {idx < arr.length - 1 && (
                   <div className="absolute left-[15px] rtl:left-auto rtl:right-[15px] top-[32px] bottom-[-16px] w-0.5 bg-slate-200 dark:bg-white/10 z-0" />
                 )}
 
-                {/* Step Circle & Tile */}
-                <div className="flex items-center gap-3 relative z-10 min-w-0">
-                  <span
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black shadow-xs ${item.circleClass}`}
-                  >
-                    {item.step}
-                  </span>
+                {/* Clickable row */}
+                <button
+                  type="button"
+                  onClick={() => onSelectSkill && onSelectSkill(item.originalSkill)}
+                  className="relative z-10 w-full flex items-center justify-between group rounded-xl px-2 py-1.5 -mx-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer text-left rtl:text-right"
+                >
+                  {/* Step Circle & Tile */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black shadow-xs ${item.circleClass}`}
+                    >
+                      {item.step}
+                    </span>
 
-                  <SkillIcon skillId={item.skillId} size="sm" className="rounded-lg shadow-2xs shrink-0" />
+                    <SkillIcon skillId={item.skillId} size="sm" className="rounded-lg shadow-2xs shrink-0" />
 
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                        {item.name}
-                      </h4>
-                      <span
-                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${item.badgeClass}`}
-                      >
-                        {item.badge}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {item.name}
+                        </h4>
+                        <span
+                          className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${item.badgeClass}`}
+                        >
+                          {item.badge}
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                        {item.modules}
                       </span>
                     </div>
-                    <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
-                      {item.modules}
-                    </span>
                   </div>
-                </div>
 
-                {/* Status indicator instead of broken misplaced arrow */}
-                <div className="shrink-0 text-slate-300 dark:text-white/20 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                  <Clock className="w-3.5 h-3.5" />
-                </div>
+                  {/* Action arrow */}
+                  <ArrowRight className={`shrink-0 w-3.5 h-3.5 text-slate-300 dark:text-white/20 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${isAr ? 'rotate-180' : ''}`} />
+                </button>
               </div>
             ))}
           </div>

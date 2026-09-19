@@ -5,6 +5,8 @@ export const CopilotRequestSchema = z.object({
   message: z.string().optional().default(''),
   text: z.string().optional(),
   attachment: z.string().optional(),
+  attachmentText: z.string().optional(),
+  attachmentData: z.any().optional(),
   userId: z.string().optional(),
   user: z
     .object({

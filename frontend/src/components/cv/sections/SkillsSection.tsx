@@ -62,7 +62,7 @@ export function SkillsSection() {
                   )
                 }
                 placeholder={isAr ? "عنوان المجموعة (مثال: Programming Languages)" : "Category Title (e.g. Programming Languages)"}
-                className="flex-1 h-8.5 px-2.5 rounded-xl border border-transparent bg-transparent text-[13.5px] font-bold text-slate-900 dark:text-white placeholder:text-slate-400 hover:border-slate-200 dark:hover:border-white/10 focus:border-blue-500 focus:bg-white dark:focus:bg-[#060913] focus:outline-none transition-all"
+                className="flex-1 h-8.5 px-2.5 rounded-xl border border-transparent bg-transparent text-[13.5px] font-bold text-slate-900 dark:text-white placeholder:text-slate-400 hover:border-slate-200 dark:hover:border-white/10 focus:border-blue-500 focus:bg-white dark:focus:bg-[#040816] focus:outline-none transition-all"
               />
 
               <button

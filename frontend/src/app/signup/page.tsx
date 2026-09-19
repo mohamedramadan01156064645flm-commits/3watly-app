@@ -121,7 +121,7 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#F8FAFC] dark:bg-[#060913] text-[#1E293B] dark:text-[#F8FAFC] flex flex-col justify-between">
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#F8FAFC] dark:bg-[#040816] text-[#1E293B] dark:text-[#F8FAFC] flex flex-col justify-between">
       <Decor />
 
       {/* Floating Top-Center Notification */}

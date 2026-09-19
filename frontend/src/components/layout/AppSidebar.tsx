@@ -15,7 +15,8 @@ import {
   LogOut,
   X,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Shield,
 } from 'lucide-react';
 import { Logo } from '@/components/brand/Logo';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -38,12 +39,12 @@ export function AppSidebar({
   const pathname = usePathname();
   const router = useRouter();
   const { isAr } = useLanguage();
-  const { logout } = useAuth();
+  const { logout, isAdmin } = useAuth();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     toast.success(isAr ? 'تم تسجيل الخروج بنجاح' : 'Logged out successfully');
-    router.push('/login');
+    window.location.replace('/');
   };
 
   const navGroups = isAr
@@ -204,6 +205,27 @@ export function AppSidebar({
           }`} />
           {!isCollapsed && <span>{isAr ? "الإعدادات" : "Settings"}</span>}
         </Link>
+
+        {/* Admin Studio — visible to admin and owner only */}
+        {isAdmin && (
+          <Link
+            href="/admin"
+            onClick={onCloseMobile}
+            title={isAr ? 'استوديو الإدارة' : 'Admin Studio'}
+            className={`flex items-center ${
+              isCollapsed ? 'justify-center p-3 rounded-2xl' : 'gap-3.5 px-3.5 py-2.5 rounded-xl'
+            } text-[13.5px] font-semibold transition-all duration-150 group ${
+              pathname.startsWith('/admin')
+                ? 'bg-gradient-to-r from-cyan-600/20 to-indigo-600/15 text-cyan-400 border border-cyan-500/25 shadow-sm'
+                : 'text-slate-500 dark:text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/8 border border-transparent'
+            }`}
+          >
+            <Shield className={`${isCollapsed ? 'w-5.5 h-5.5' : 'w-4.5 h-4.5'} transition-colors ${
+              pathname.startsWith('/admin') ? 'text-cyan-400' : 'text-slate-500 group-hover:text-cyan-400'
+            }`} />
+            {!isCollapsed && <span>{isAr ? 'استوديو الإدارة' : 'Admin Studio'}</span>}
+          </Link>
+        )}
 
         {/* Direct Log Out Button */}
         <button

@@ -16,13 +16,15 @@ export const emptyCV: CVData = {
   education: [],
   projects: [],
   skills: [],
+  certifications: [],
   sectionOrder: [
     'contact',
     'summary',
     'experience',
     'education',
     'projects',
-    'skills'
+    'skills',
+    'certifications'
   ],
   hiddenSections: [],
   skillsSummary: null
@@ -61,44 +63,57 @@ export const KEYWORD_BENCHMARK = 13;
 export const TEMPLATES: {
   id: TemplateId;
   name: string;
+  nameAr: string;
   columns: number;
   description: string;
 }[] = [
   {
     id: 'ats-classic',
     name: 'ATS Friendly',
+    nameAr: 'ATS Friendly (موصى به)',
     columns: 1,
-    description: 'Single-column template with blue accents, optimized for applicant tracking systems.'
+    description: 'Single-column academic serif layout, gold standard for ATS parsing.'
   },
   {
     id: 'compact',
     name: 'Compact',
+    nameAr: 'Compact (مدمج لصفحة واحدة)',
     columns: 1,
-    description: 'Single column ATS friendly template with tight spacing.'
+    description: 'High-density single page layout with highlighted section banners.'
   },
   {
     id: 'two-column',
     name: 'Two Column',
+    nameAr: 'Two Column (تخطيط عمودين)',
     columns: 2,
-    description: 'A two-column resume layout with sections side by side.'
+    description: 'Structured sidebar layout with separate skills, education, and certifications.'
   },
   {
     id: 'simple',
-    name: 'Simple (Academic)',
+    name: 'Simple',
+    nameAr: 'Simple (أكاديمي كلاسيكي)',
     columns: 1,
-    description: 'Traditional academic CV layout with labeled columns and horizontal rules.'
+    description: 'Traditional academic CV layout with clean horizontal rules.'
+  },
+  {
+    id: 'modern-minimal',
+    name: 'Modern Minimal',
+    nameAr: 'Modern Minimal',
+    columns: 1,
+    description: 'Clean modern tech layout with sleek typography and badges.'
   }
 ];
 
 
 export const SECTION_META: Record<
   SectionId,
-  {label: string;heading: string;}> =
-{
-  contact: { label: 'Header & Contact', heading: '' },
-  summary: { label: 'Professional Summary', heading: 'Professional Summary' },
-  experience: { label: 'Experience', heading: 'Experience' },
-  education: { label: 'Education', heading: 'Education' },
-  projects: { label: 'Projects', heading: 'Projects' },
-  skills: { label: 'Skills', heading: 'Skills' }
+  { label: string; labelAr: string; heading: string; headingAr: string }
+> = {
+  contact: { label: 'Header & Contact', labelAr: 'البيانات الشخصية والتواصل', heading: '', headingAr: '' },
+  summary: { label: 'Professional Summary', labelAr: 'الملخص المهني', heading: 'Professional Summary', headingAr: 'الملخص المهني' },
+  experience: { label: 'Experience', labelAr: 'الخبرات المهنية', heading: 'Experience', headingAr: 'الخبرات المهنية' },
+  education: { label: 'Education', labelAr: 'المؤهل الدراسي', heading: 'Education', headingAr: 'المؤهلات الدراسية' },
+  projects: { label: 'Projects', labelAr: 'المشاريع التطبيقية', heading: 'Projects', headingAr: 'المشاريع العملية' },
+  skills: { label: 'Skills', labelAr: 'المهارات التقنية', heading: 'Skills', headingAr: 'المهارات' },
+  certifications: { label: 'Certifications', labelAr: 'الشهادات الاحترافية', heading: 'Certifications', headingAr: 'الشهادات والدورات' }
 };

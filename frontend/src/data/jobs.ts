@@ -19,10 +19,11 @@ export interface JobItem {
   seniorityAr: string;
   salaryRange: string;
   salaryRangeAr: string;
-  matchScore: number;
+  matchScore: number | null;
+  postedAt?: string | null;
   postedAgo: string;
   postedAgoAr: string;
-  applicantsCount: number;
+  applicantsCount: number | null;
   department: string;
   departmentAr: string;
   education: string;
@@ -625,9 +626,12 @@ export const mockDashboardData = {
   marketOverview: {
     activeJobs: '1,240',
     activeJobsDelta: '+8% vs last month',
+    activeJobsDeltaAr: '+8% مقارنة بالشهر الماضي',
     avgSalary: 'EGP 15K',
     avgSalaryDelta: '+6% vs last month',
+    avgSalaryDeltaAr: '+6% مقارنة بالشهر الماضي',
     competition: '2.4x',
-    competitionLevel: 'High'
+    competitionLevel: 'High',
+    competitionLevelAr: 'مرتفع'
   }
 };

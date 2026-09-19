@@ -12,7 +12,10 @@ import {
   Trash2, 
   Loader2,
   SlidersHorizontal,
-  Zap
+  Zap,
+  Sparkles,
+  X,
+  FilePlus2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCV } from '@/contexts/CVContext';
@@ -78,29 +81,59 @@ export function CVVersionSelector() {
       const json = await res.json();
       const data = json.data;
 
+      // Build structured social links
+      const parsedSocialLinks = Array.isArray(data.socialLinks) && data.socialLinks.length > 0
+        ? data.socialLinks
+        : [
+            data.linkedin ? { id: 'link-li', platform: 'LinkedIn', url: data.linkedin } : null,
+            data.github ? { id: 'link-gh', platform: 'GitHub', url: data.github } : null,
+            data.portfolio ? { id: 'link-pf', platform: 'Portfolio', url: data.portfolio } : null,
+          ].filter(Boolean);
+
+      const resolvedJobTitle = data.currentTitle || data.targetRole || data.experiences?.[0]?.role || (data.education?.[0]?.degree ? `${data.education[0].degree} Graduate` : '') || (isAr ? 'متخصص تقني' : 'Tech Professional');
+
       const newCvData: CVData = {
         contact: {
           fullName: data.fullName || 'User',
-          jobTitle: data.currentTitle || data.targetRole || 'Data Analyst',
+          jobTitle: resolvedJobTitle,
           phone: data.phone || '',
           email: data.email || '',
           location: data.location || 'Cairo, Egypt',
-          linkedin: data.linkedin || ''
+          linkedin: data.linkedin || '',
+          github: data.github || '',
+          portfolio: data.portfolio || '',
+          socialLinks: parsedSocialLinks as any
         },
         summary: data.summary || '',
         skillsSummary: null,
         experience: Array.isArray(data.experiences) && data.experiences.length > 0 ? data.experiences : [],
         education: Array.isArray(data.education) && data.education.length > 0 ? data.education : [],
-        projects: Array.isArray(data.projects) && data.projects.length > 0 ? data.projects : [],
+        projects: Array.isArray(data.projects) && data.projects.length > 0 ? data.projects.map((p: any, idx: number) => ({
+          id: p.id || `prj-${idx + 1}`,
+          title: p.title || `Project ${idx + 1}`,
+          technologies: Array.isArray(p.technologies) ? p.technologies : [],
+          github: p.github || '',
+          link: p.link || '',
+          bullets: Array.isArray(p.bullets) && p.bullets.length > 0
+            ? p.bullets
+            : (p.description ? [p.description] : [])
+        })) : [],
         skills: Array.isArray(data.categorizedSkillGroups) && data.categorizedSkillGroups.length > 0
           ? data.categorizedSkillGroups
           : (data.skills?.length ? [{ id: 'tech-1', label: 'Technical Skills', skills: data.skills }] : []),
-        sectionOrder: ['summary', 'experience', 'education', 'skills', 'projects'],
+        certifications: Array.isArray(data.certificates) ? data.certificates.map((c: any, idx: number) => ({
+          id: c.id || `cert-${idx + 1}`,
+          name: c.name || '',
+          issuer: c.issuer || 'Verified Credential',
+          url: c.url || undefined,
+          date: c.date || undefined,
+        })) : [],
+        sectionOrder: ['summary', 'experience', 'education', 'skills', 'projects', 'certifications'],
         hiddenSections: []
       };
 
       const cleanFileName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ').trim() || 'سيرة ذاتية مرفوعة';
-      const newVer = createVersion(cleanFileName, data.targetRole || data.currentTitle || 'Data Analyst', newCvData);
+      const newVer = createVersion(cleanFileName, resolvedJobTitle, newCvData);
       
       // Immediately set as active & switch editor
       setActiveVersion(newVer.id);
@@ -124,8 +157,10 @@ export function CVVersionSelector() {
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
-    createVersion(newTitle, newTargetRole, currentVersion?.cvData);
+    // Pass undefined so createVersion uses emptyCV — a truly blank new CV
+    createVersion(newTitle.trim(), newTargetRole.trim() || 'Data Analyst', undefined);
     setNewTitle('');
+    setNewTargetRole('Data Analyst');
     setNewVersionModalOpen(false);
   };
 
@@ -269,7 +304,7 @@ export function CVVersionSelector() {
               type="button"
               disabled={isUploading}
               onClick={() => fileInputRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-[12px] font-semibold transition-colors cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[12.5px] font-semibold transition-all cursor-pointer shadow-md shadow-blue-600/20 disabled:opacity-50"
             >
               {isUploading ? (
                 <>
@@ -291,7 +326,7 @@ export function CVVersionSelector() {
                   duplicateVersion(editingVersionId);
                   setIsOpen(false);
                 }}
-                className="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-[11.5px] font-medium text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 text-[12px] font-medium text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
               >
                 <Copy className="w-3.5 h-3.5 text-slate-400" />
                 <span>{isAr ? "استنساخ الحالية" : "Duplicate"}</span>
@@ -303,9 +338,9 @@ export function CVVersionSelector() {
                   setIsOpen(false);
                   setNewVersionModalOpen(true);
                 }}
-                className="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-[11.5px] font-medium text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl border border-blue-500/30 bg-blue-50/60 dark:bg-blue-950/30 hover:bg-blue-100/60 dark:hover:bg-blue-900/40 text-[12px] font-semibold text-blue-600 dark:text-blue-400 transition-all cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5 text-slate-400" />
+                <Plus className="w-3.5 h-3.5" />
                 <span>{isAr ? "نسخة جديدة" : "New CV"}</span>
               </button>
             </div>
@@ -313,70 +348,98 @@ export function CVVersionSelector() {
         </div>
       )}
 
-      {/* Modal: New Blank Version */}
+
+      {/* Modal: New Blank Version — Premium Design */}
       {newVersionModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                {isAr ? "إنشاء نسخة سيرة ذاتية جديدة" : "Create New CV Version"}
-              </h3>
-              <button onClick={() => setNewVersionModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">✕</button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 dark:border-white/8 bg-white dark:bg-[#0d1425] shadow-2xl overflow-hidden">
+            
+            {/* Gradient Header */}
+            <div className="relative px-6 pt-6 pb-5 bg-gradient-to-br from-blue-600/8 via-indigo-500/5 to-purple-600/8 dark:from-blue-500/12 dark:via-indigo-500/8 dark:to-purple-500/10 border-b border-slate-100 dark:border-white/8">
+              <button
+                onClick={() => { setNewVersionModalOpen(false); setNewTitle(''); setNewTargetRole('Data Analyst'); }}
+                className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-600/10 dark:bg-blue-500/15 border border-blue-500/20 dark:border-blue-400/20">
+                  <FilePlus2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-[15px] font-bold text-slate-900 dark:text-white">
+                    {isAr ? 'إنشاء سيرة ذاتية جديدة' : 'Create New CV'}
+                  </h3>
+                  <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    {isAr ? 'نسخة فارغة جديدة كلياً — مستقلة عن نسخك الحالية' : 'A fresh blank CV, independent from your existing ones'}
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              {isAr 
-                ? "يمكنك إنشاء نسخة جديدة وتخصيص مهاراتها ومشاريعها لتناسب مجال عملك المستهدف."
-                : "Create a tailored CV version for a specific role."}
-            </p>
-
-            <form onSubmit={handleCreateSubmit} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  {isAr ? "اسم النسخة" : "Version Name"}
+            {/* Form Body */}
+            <form onSubmit={handleCreateSubmit} className="p-6 space-y-5">
+              <div className="space-y-1.5">
+                <label className="block text-[12px] font-semibold text-slate-700 dark:text-slate-300">
+                  {isAr ? 'اسم السيرة الذاتية' : 'CV Name'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder={isAr ? "مثال: سيرة ذاتية - Machine Learning" : "e.g. Machine Learning CV"}
+                  autoFocus
+                  placeholder={isAr ? 'مثال: سيرة ذاتية - Machine Learning' : 'e.g. Machine Learning CV'}
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-[13px] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 dark:focus:border-blue-400 transition-all"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  {isAr ? "المسمى / الدور المستهدف" : "Target Role"}
+              <div className="space-y-1.5">
+                <label className="block text-[12px] font-semibold text-slate-700 dark:text-slate-300">
+                  {isAr ? 'المسمى الوظيفي المستهدف' : 'Target Role'}
                 </label>
                 <input
                   type="text"
-                  placeholder={isAr ? "مثال: Machine Learning Engineer" : "e.g. Data Analyst"}
+                  placeholder={isAr ? 'مثال: Data Analyst / ML Engineer' : 'e.g. Data Analyst'}
                   value={newTargetRole}
                   onChange={(e) => setNewTargetRole(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-[13px] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 dark:focus:border-blue-400 transition-all"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              {/* Info chip */}
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-700/30">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                <p className="text-[11.5px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                  {isAr
+                    ? 'ستبدأ السيرة الذاتية فارغة تماماً. يمكنك ملؤها يدوياً أو رفع ملف CV لاحقاً.'
+                    : 'This CV starts completely blank. You can fill it manually or import a file later.'}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 pt-1">
                 <button
                   type="button"
-                  onClick={() => setNewVersionModalOpen(false)}
-                  className="px-3.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 text-xs font-medium cursor-pointer"
+                  onClick={() => { setNewVersionModalOpen(false); setNewTitle(''); setNewTargetRole('Data Analyst'); }}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 text-[13px] font-medium hover:bg-slate-50 dark:hover:bg-white/5 transition-all cursor-pointer"
                 >
-                  {isAr ? "إلغاء" : "Cancel"}
+                  {isAr ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer shadow-xs"
+                  disabled={!newTitle.trim()}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[13px] font-semibold shadow-md shadow-blue-600/25 transition-all cursor-pointer"
                 >
-                  {isAr ? "إنشاء النسخة" : "Create"}
+                  <FilePlus2 className="w-3.5 h-3.5" />
+                  {isAr ? 'إنشاء' : 'Create'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
 
       {/* Modal: Manage Versions */}
       {managerModalOpen && (

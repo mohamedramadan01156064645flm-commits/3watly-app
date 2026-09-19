@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Cairo } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { AppProviders } from "@/components/providers/AppProviders";
 
@@ -32,15 +33,34 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ar" dir="rtl" className={`${inter.variable} ${cairo.variable}`}>
+    <html lang="ar" dir="rtl" className={`dark ${inter.variable} ${cairo.variable}`} suppressHydrationWarning>
       <head>
+        <Script
+          id="theme-initializer"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const t = localStorage.getItem('majra-theme');
+                if (t === 'light') {
+                  document.documentElement.classList.remove('dark');
+                } else if (t === 'dark') {
+                  document.documentElement.classList.add('dark');
+                }
+              } catch(e) {}
+            `,
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Preload Primary Hero Background Artwork for instant LCP render */}
+        <link rel="preload" as="image" type="image/webp" href="/images/hero-ar-dark.webp" fetchPriority="high" />
+
         <link rel="icon" href="/logo.png" sizes="any" />
         <link rel="shortcut icon" href="/logo.png" />
         <link rel="apple-touch-icon" href="/logo.png" />
       </head>
-      <body className="antialiased min-h-screen bg-[#F8FAFC] dark:bg-[#060913] text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white font-sans">
+      <body className="antialiased min-h-screen bg-[#F8FAFC] dark:bg-[#040816] text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white font-sans" suppressHydrationWarning>
         <AppProviders>
           {children}
         </AppProviders>

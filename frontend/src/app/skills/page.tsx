@@ -54,7 +54,7 @@ export default function SkillGapPage() {
             <PriorityGrid plan={plan} onSelectSkill={(s) => setSelectedSkillModal(s)} />
           </div>
           <div className="lg:col-span-4">
-            <SequencedActionPlan plan={plan} />
+            <SequencedActionPlan plan={plan} onSelectSkill={(s) => setSelectedSkillModal(s)} />
           </div>
         </div>
 

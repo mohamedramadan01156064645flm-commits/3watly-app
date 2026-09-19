@@ -28,12 +28,14 @@ export function getRole(roleId: string): RoleDefinition {
   return ROLES.find((role) => role.id === roleId) ?? ROLES[0];
 }
 
-export function isSkillInCV(text: string, def: SkillDefinition): boolean {
-  return [def.name, ...def.aliases].some((term) => containsKeyword(text, term));
+export function isSkillInCV(text: string, def?: SkillDefinition): boolean {
+  if (!def || !def.name) return false;
+  return [def.name, ...(def.aliases || [])].some((term) => containsKeyword(text, term));
 }
 
-function priorityScore(demand: number, def: SkillDefinition): number {
-  return demand * 0.6 + def.growth * 0.25 + TIER_BONUS[def.tier];
+function priorityScore(demand: number, def?: SkillDefinition): number {
+  if (!def) return demand;
+  return demand * 0.6 + (def.growth || 0) * 0.25 + (TIER_BONUS[def.tier] || 0);
 }
 
 function bandFor(score: number): PriorityBand {
@@ -67,32 +69,34 @@ export function computePlan({
   const role = getRole(roleId);
   const text = cvToText(cv);
 
-  const all: PlannedSkill[] = role.coreSkills.map(({ skillId, demand }) => {
-    const def = SKILLS[skillId];
-    const covered = isSkillInCV(text, def);
-    const status: SkillStatus = covered ?
-    'completed' :
-    statuses[skillId] ?? 'not-started';
-    const checkedActions = actionProgress[skillId] ?? [];
-    const score = priorityScore(demand, def);
+  const all: PlannedSkill[] = (role.coreSkills || [])
+    .filter(({ skillId }) => !!SKILLS[skillId])
+    .map(({ skillId, demand }) => {
+      const def = SKILLS[skillId];
+      const covered = isSkillInCV(text, def);
+      const status: SkillStatus = covered ?
+      'completed' :
+      statuses[skillId] ?? 'not-started';
+      const checkedActions = actionProgress[skillId] ?? [];
+      const score = priorityScore(demand, def);
 
-    return {
-      def,
-      demand,
-      score,
-      band: bandFor(score),
-      status,
-      covered,
-      jobsUnlocked: 0,
-      checkedActions,
-      missingPrerequisites: def.prerequisites.
-      map((id) => SKILLS[id]).
-      filter((pre) => pre && !isSkillInCV(text, pre)),
-      remainingHours:
-      def.hours * (
-      1 - Math.min(1, checkedActions.length / def.actions.length))
-    };
-  });
+      return {
+        def,
+        demand,
+        score,
+        band: bandFor(score),
+        status,
+        covered,
+        jobsUnlocked: 0,
+        checkedActions,
+        missingPrerequisites: (def.prerequisites || []).
+        map((id) => SKILLS[id]).
+        filter((pre) => pre && !isSkillInCV(text, pre)),
+        remainingHours:
+        (def.hours || 10) * (
+        1 - Math.min(1, checkedActions.length / Math.max(1, (def.actions || []).length)))
+      };
+    });
 
   const covered = all.filter((item) => item.covered);
   const gaps = all.filter((item) => !item.covered);
@@ -160,8 +164,8 @@ export function computePlan({
     future,
     totalSteps: all.length,
     coveredSteps: covered.length,
-    progressPct: Math.round(covered.length / all.length * 100),
-    readinessPct: Math.round(coveredDemand / totalDemand * 100),
+    progressPct: all.length > 0 ? Math.round(covered.length / all.length * 100) : 0,
+    readinessPct: totalDemand > 0 ? Math.round(coveredDemand / totalDemand * 100) : 0,
     eligibleJobs,
     potentialJobs,
     multiplier:

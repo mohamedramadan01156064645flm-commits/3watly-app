@@ -16,6 +16,7 @@ import { StepShell } from '@/components/onboarding/StepShell';
 import { SecureBadge } from '@/components/onboarding/PageHeading';
 import { StepFooter } from '@/components/onboarding/StepFooter';
 import { useOnboarding } from '@/contexts/OnboardingContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LOCATION_OPTIONS, LocationItem } from '@/data/roles';
 import type { RoleId } from '@/types/onboarding';
@@ -31,10 +32,32 @@ const iconMap = {
 export default function CareerPathPage() {
   const router = useRouter();
   const { isAr } = useLanguage();
+  const { user } = useAuth();
   const { role, experience, locations, selectRole, setExperience, toggleLocation } =
     useOnboarding();
   const [locationMenuOpen, setLocationMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // If user already completed onboarding (has a parsed CV), send them to dashboard
+  React.useEffect(() => {
+    try {
+      if (!user?.id) return;
+      const parsed = localStorage.getItem(`3watly_parsed_cv_${user.id}`);
+      if (parsed) {
+        const p = JSON.parse(parsed);
+        const hasRealData = Boolean(
+          p && (
+            (p.fullName && p.fullName.trim().length > 0) ||
+            (Array.isArray(p.experiences) && p.experiences.length > 0) ||
+            (Array.isArray(p.skills) && p.skills.length > 0)
+          )
+        );
+        if (hasRealData) {
+          router.replace('/dashboard');
+        }
+      }
+    } catch {}
+  }, [router]);
 
   const roleOptionsList = isAr
     ? [
@@ -288,9 +311,15 @@ export default function CareerPathPage() {
         <div className="mt-auto pt-8">
           <StepFooter
             onNext={() => router.push('/onboarding/cv-upload')}
-            nextDisabled={!role}
+            nextDisabled={!role || !experience}
             nextLabel={isAr ? "المتابعة لرفع الـ CV" : "Continue to CV Upload"}
-            hint={!role ? (isAr ? "اختر مساراً وظيفياً للمتابعة" : "Please select a target role to continue") : undefined}
+            hint={
+              !role
+                ? (isAr ? "اختر مساراً وظيفياً للمتابعة" : "Please select a target role to continue")
+                : !experience
+                ? (isAr ? "اختر مستوى خبرتك الحالي للمتابعة" : "Please select your experience level to continue")
+                : undefined
+            }
           />
         </div>
       </div>

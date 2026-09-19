@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
-  Search, 
   Bell, 
   Menu, 
   CheckCircle2, 
@@ -15,7 +14,8 @@ import {
   User,
   ChevronDown,
   Camera,
-  RotateCcw
+  RotateCcw,
+  Shield,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { LanguageToggle } from '@/components/ui/LanguageToggle';
@@ -41,10 +41,9 @@ export function AppTopbar({
 }: AppTopbarProps) {
   const router = useRouter();
   const { isAr } = useLanguage();
-  const { user, logout, updateAvatar } = useAuth();
+  const { user, logout, updateAvatar, isAdmin } = useAuth();
   const { reset: resetOnboarding } = useOnboarding();
   
-  const [searchQuery, setSearchQuery] = useState('');
   const [notifOpen, setNotifOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   
@@ -104,15 +103,9 @@ export function AppTopbar({
     return () => document.removeEventListener('mousedown', handlePointerDown);
   }, []);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      router.push(`/jobs?q=${encodeURIComponent(searchQuery.trim())}`);
-    }
-  };
 
   return (
-    <header className="sticky top-0 z-30 w-full bg-white/95 dark:bg-[#060913]/95 backdrop-blur-xl border-b border-slate-200/80 dark:border-white/10 transition-colors duration-300">
+    <header className="sticky top-0 z-30 w-full bg-white/95 dark:bg-[#040816]/95 backdrop-blur-xl border-b border-slate-200/80 dark:border-white/10 transition-colors duration-300">
       {/* Hidden File Input for Avatar Upload */}
       <input
         type="file"
@@ -146,22 +139,7 @@ export function AppTopbar({
           </div>
         </div>
 
-        {/* Center: Search Bar */}
-        {showSearch && (
-          <form 
-            onSubmit={handleSearchSubmit} 
-            className="hidden md:flex flex-1 max-w-md mx-4 relative"
-          >
-            <Search className="pointer-events-none absolute ltr:left-3.5 rtl:right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={isAr ? "ابحث عن وظائف، مهارات، شركات..." : "Search jobs, skills, companies..."}
-              className="w-full h-11 ltr:pl-10 ltr:pr-4 rtl:pr-10 rtl:pl-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-[#0B1120] text-[13.5px] font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-            />
-          </form>
-        )}
+
 
         {/* Right Side: ThemeToggle + LanguageToggle + Notifications + User Avatar */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -326,6 +304,18 @@ export function AppTopbar({
                     <Settings className="w-4 h-4 text-slate-400" />
                     <span>{isAr ? "الإعدادات" : "Settings"}</span>
                   </Link>
+
+                  {/* Admin Studio — admin/owner only */}
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 transition-colors"
+                    >
+                      <Shield className="w-4 h-4 text-cyan-500" />
+                      <span>{isAr ? "استوديو الإدارة" : "Admin Studio"}</span>
+                    </Link>
+                  )}
                 </div>
 
                 {/* Logout Action */}

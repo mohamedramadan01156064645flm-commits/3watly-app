@@ -135,7 +135,7 @@ export function PriorityGrid({ plan, onSelectSkill }: PriorityGridProps) {
                   className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 text-xs transition-colors cursor-pointer shadow-xs active:scale-98"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>{isAr ? "خطة الإتقان والتطبيق" : "Mastery & Action Plan"}</span>
+                  <span>{isAr ? "موارد التعلم والتطبيق" : "Learning Resources"}</span>
                 </button>
               </div>
             </div>

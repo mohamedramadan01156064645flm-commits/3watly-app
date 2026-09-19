@@ -10,6 +10,7 @@ import {
 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { useCV } from '../../contexts/CVContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { SECTION_META } from '../../data/cvData';
 import type { SectionId } from '../../types/cv';
 
@@ -20,6 +21,7 @@ interface ReorderModalProps {
 
 export function ReorderModal({ open, onClose }: ReorderModalProps) {
   const { cv, update } = useCV();
+  const { isAr } = useLanguage();
 
   const move = (index: number, direction: -1 | 1) => {
     const target = index + direction;
@@ -44,15 +46,19 @@ export function ReorderModal({ open, onClose }: ReorderModalProps) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Reorder sections"
-      description="The order here is the order recruiters and ATS parsers read."
+      title={isAr ? "إعادة ترتيب أقسام السيرة الذاتية" : "Reorder sections"}
+      description={
+        isAr
+          ? "الترتيب المعروض هنا هو الترتيب الفعلي الذي تقرأ به أنظمة الـ ATS ومسؤولو التوظيف بياناتك."
+          : "The order here is the order recruiters and ATS parsers read."
+      }
       footer={
       <button
         type="button"
         onClick={onClose}
-        className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 ease-smooth hover:bg-brand-700">
+        className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 ease-smooth hover:bg-brand-700 cursor-pointer">
         
-          Done
+          {isAr ? "تم وحفظ" : "Done"}
         </button>
       }>
       
@@ -81,10 +87,10 @@ export function ReorderModal({ open, onClose }: ReorderModalProps) {
                 hidden ? 'text-slate-400' : 'text-slate-800'}`
                 }>
                 
-                {SECTION_META[id].label}
+                {isAr ? SECTION_META[id].labelAr : SECTION_META[id].label}
                 {locked &&
-                <span className="ml-2 text-[11px] font-normal text-slate-400">
-                    always first
+                <span className="mx-2 text-[11px] font-normal text-slate-400">
+                    ({isAr ? 'دائماً أولاً' : 'always first'})
                   </span>
                 }
               </span>

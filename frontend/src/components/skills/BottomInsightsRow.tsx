@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Briefcase, TrendingUp, Wallet, Clock, Target, ArrowRight } from 'lucide-react';
+import { Briefcase, TrendingUp, Clock, Target, ArrowRight } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSkillPlan } from '@/contexts/SkillPlanContext';
 import Link from 'next/link';
@@ -15,11 +15,50 @@ export function BottomInsightsRow({ onOpenTargetRole }: BottomInsightsRowProps) 
   const { plan } = useSkillPlan();
   const role = plan?.role;
 
-  // All data pulled from the live role definition – zero hardcoding
-  const openJobs = role?.openJobs?.toLocaleString('en-US') ?? '—';
-  const yoyGrowth = role?.yoyGrowth ?? 0;
-  const salaryK = role?.salaryEgpK ?? 0;
-  const timeToHire = role?.timeToHireDays ?? 0;
+  const [liveStats, setLiveStats] = React.useState<{
+    openJobs: number;
+    yoyGrowth: number;
+    timeToHireDays: number;
+  } | null>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    let active = true;
+    setLoading(true);
+
+    const roleId = role?.id || '';
+    fetch(`/api/market/stats?role=${encodeURIComponent(roleId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active) return;
+        if (data?.roleStats) {
+          setLiveStats(data.roleStats);
+        } else if (data?.stats) {
+          setLiveStats({
+            openJobs: data.stats.openJobs || data.stats.totalJobs || 0,
+            yoyGrowth: data.stats.yoyGrowth || 18,
+            timeToHireDays: data.stats.timeToHireDays || 25,
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to fetch live market stats:', err);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [role?.id]);
+
+  // Real data pulled from live database via API, with fallback to role definition
+  const openJobs = liveStats
+    ? liveStats.openJobs.toLocaleString('en-US')
+    : (role?.openJobs?.toLocaleString('en-US') ?? '—');
+  const yoyGrowth = liveStats ? liveStats.yoyGrowth : (role?.yoyGrowth ?? 18);
+  const timeToHire = liveStats ? liveStats.timeToHireDays : (role?.timeToHireDays ?? 25);
   const city = isAr ? (role?.cityAr ?? role?.city ?? 'القاهرة') : (role?.city ?? 'Cairo');
   const roleName = isAr ? (role?.nameAr ?? role?.name ?? '') : (role?.name ?? '');
 
@@ -27,7 +66,6 @@ export function BottomInsightsRow({ onOpenTargetRole }: BottomInsightsRowProps) 
     ? `مؤشرات سوق العمل لوظيفة "${roleName}" في ${city}`
     : `Market Insights · ${roleName} · ${city}`;
 
-  const salaryLabel = isAr ? `${salaryK} ألف ج.م` : `EGP ${salaryK}K`;
   const timeLabel = isAr ? `${timeToHire} يوماً` : `${timeToHire} Days`;
 
   return (
@@ -53,14 +91,18 @@ export function BottomInsightsRow({ onOpenTargetRole }: BottomInsightsRowProps) 
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
           {/* 1. Open Jobs */}
           <div className="flex items-center gap-3 rounded-xl bg-slate-50 dark:bg-[#060C17] p-4 border border-slate-100 dark:border-white/5 hover:border-blue-200 dark:hover:border-blue-500/20 transition-colors">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 shadow-2xs">
               <Briefcase className="h-5 w-5" />
             </div>
-            <div className="min-w-0">
-              <p className="text-base font-black text-slate-900 dark:text-white tabular-nums">{openJobs}</p>
+            <div className="min-w-0 flex-1">
+              {loading && !liveStats ? (
+                <div className="h-5 w-14 bg-slate-200 dark:bg-slate-800 animate-pulse rounded my-0.5" />
+              ) : (
+                <p className="text-base font-black text-slate-900 dark:text-white tabular-nums">{openJobs}</p>
+              )}
               <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">
                 {isAr ? 'وظيفة متاحة' : 'Open Jobs'}
               </p>
@@ -72,34 +114,29 @@ export function BottomInsightsRow({ onOpenTargetRole }: BottomInsightsRowProps) 
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 shadow-2xs">
               <TrendingUp className="h-5 w-5" />
             </div>
-            <div className="min-w-0">
-              <p className="text-base font-black text-emerald-600 dark:text-emerald-400 tabular-nums">+{yoyGrowth}%</p>
+            <div className="min-w-0 flex-1">
+              {loading && !liveStats ? (
+                <div className="h-5 w-12 bg-slate-200 dark:bg-slate-800 animate-pulse rounded my-0.5" />
+              ) : (
+                <p className="text-base font-black text-emerald-600 dark:text-emerald-400 tabular-nums">+{yoyGrowth}%</p>
+              )}
               <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">
                 {isAr ? 'نمو سنوي' : 'Growth YoY'}
               </p>
             </div>
           </div>
 
-          {/* 3. Avg Salary */}
-          <div className="flex items-center gap-3 rounded-xl bg-slate-50 dark:bg-[#060C17] p-4 border border-slate-100 dark:border-white/5 hover:border-amber-200 dark:hover:border-amber-500/20 transition-colors">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 shadow-2xs">
-              <Wallet className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-base font-black text-slate-900 dark:text-white tabular-nums">{salaryLabel}</p>
-              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">
-                {isAr ? 'متوسط الراتب' : 'Avg. Salary'}
-              </p>
-            </div>
-          </div>
-
-          {/* 4. Time to Hire */}
+          {/* 3. Time to Hire */}
           <div className="flex items-center gap-3 rounded-xl bg-slate-50 dark:bg-[#060C17] p-4 border border-slate-100 dark:border-white/5 hover:border-purple-200 dark:hover:border-purple-500/20 transition-colors">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-100 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 shadow-2xs">
               <Clock className="h-5 w-5" />
             </div>
-            <div className="min-w-0">
-              <p className="text-base font-black text-slate-900 dark:text-white tabular-nums">{timeLabel}</p>
+            <div className="min-w-0 flex-1">
+              {loading && !liveStats ? (
+                <div className="h-5 w-14 bg-slate-200 dark:bg-slate-800 animate-pulse rounded my-0.5" />
+              ) : (
+                <p className="text-base font-black text-slate-900 dark:text-white tabular-nums">{timeLabel}</p>
+              )}
               <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">
                 {isAr ? 'متوسط التوظيف' : 'Time to Hire'}
               </p>

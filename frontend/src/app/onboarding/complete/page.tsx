@@ -27,7 +27,7 @@ export default function CompletePage() {
 
   return (
     <RequireOnboarding need="parsedCv">
-      <div className="flex min-h-screen w-full flex-col bg-[#FCFDFF] dark:bg-[#060913] text-[#1E293B] dark:text-[#F8FAFC]">
+      <div className="flex min-h-screen w-full flex-col bg-[#FCFDFF] dark:bg-[#040816] text-[#1E293B] dark:text-[#F8FAFC]">
         <AppHeader />
 
         <main className="flex flex-1 items-center justify-center px-6 py-12">

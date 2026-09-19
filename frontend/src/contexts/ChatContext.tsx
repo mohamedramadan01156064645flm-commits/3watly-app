@@ -42,7 +42,7 @@ type ChatValue = {
   isThinking: boolean;
   isLoading: boolean;
   error: string | null;
-  sendMessage: (text: string, attachment?: string) => Promise<void>;
+  sendMessage: (text: string, attachment?: string, attachmentData?: any) => Promise<void>;
   loadMessages: () => Promise<void>;
   resetChat: () => Promise<void>;
   clearChat: () => Promise<void>;
@@ -156,7 +156,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   // Send message and process structured JSON response
   const sendMessage = useCallback(
-    async (text: string, attachment?: string) => {
+    async (text: string, attachment?: string, attachmentData?: any) => {
       const trimmed = text.trim();
       if (!trimmed && !attachment) return;
       if (isSendingRef.current || isThinking) return;
@@ -190,11 +190,56 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       isSendingRef.current = true;
 
       try {
-        let activeCvPayload: any = undefined;
-        try {
-          const raw = localStorage.getItem('3watly_parsed_cv');
-          if (raw) activeCvPayload = JSON.parse(raw);
-        } catch {}
+        let activeCvPayload: any = attachmentData;
+        if (!activeCvPayload && typeof window !== 'undefined') {
+          try {
+            const raw = localStorage.getItem('3watly_parsed_cv');
+            if (raw) activeCvPayload = JSON.parse(raw);
+
+            // Always sync latest ATS score and data from active version in 3watly_cv_versions
+            const versRaw = localStorage.getItem('3watly_cv_versions');
+            if (versRaw) {
+              const vers = JSON.parse(versRaw);
+              const activeId = localStorage.getItem('3watly_active_cv_id');
+              const matchedVer = (Array.isArray(vers) && (vers.find((v: any) => v.id === activeId) || vers[0])) || null;
+
+              if (matchedVer) {
+                const liveScore = matchedVer.analysis?.score;
+                if (liveScore !== undefined) {
+                  activeCvPayload = {
+                    ...(activeCvPayload || {}),
+                    atsScore: liveScore,
+                    atsReport: { score: liveScore, band: matchedVer.analysis?.band },
+                  };
+                }
+
+                if (!activeCvPayload || !activeCvPayload.skills?.length) {
+                  const flatSkills: string[] = [];
+                  (matchedVer.cvData?.skills || []).forEach((g: any) => {
+                    if (Array.isArray(g.skills)) flatSkills.push(...g.skills);
+                  });
+                  activeCvPayload = {
+                    ...(activeCvPayload || {}),
+                    fullName: matchedVer.cvData?.contact?.fullName || user?.fullName,
+                    currentTitle: matchedVer.cvData?.contact?.jobTitle,
+                    targetRole: matchedVer.targetRole || matchedVer.cvData?.contact?.jobTitle || 'Data Analyst',
+                    email: matchedVer.cvData?.contact?.email || user?.email,
+                    phone: matchedVer.cvData?.contact?.phone,
+                    location: matchedVer.cvData?.contact?.location,
+                    summary: matchedVer.cvData?.summary,
+                    skills: flatSkills,
+                    categorizedSkillGroups: matchedVer.cvData?.skills,
+                    experiences: matchedVer.cvData?.experience,
+                    education: matchedVer.cvData?.education,
+                    projects: matchedVer.cvData?.projects,
+                    atsScore: liveScore,
+                    atsReport: liveScore !== undefined ? { score: liveScore, band: matchedVer.analysis?.band } : undefined,
+                  };
+                }
+              }
+            }
+          } catch {}
+        }
 
         // Gather recent messages for memory context
         const recentMessagesPayload = messages.slice(-6).map((m) => ({
@@ -208,6 +253,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({
             message: trimmed,
             attachment,
+            attachmentText: attachmentData?.rawText || activeCvPayload?.rawText || undefined,
+            attachmentData: attachmentData || undefined,
             userId: user?.id,
             activeCv: activeCvPayload,
             recentMessages: recentMessagesPayload,

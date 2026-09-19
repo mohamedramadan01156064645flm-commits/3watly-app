@@ -18,6 +18,15 @@ function formatUrl(rawUrl?: string): string {
   return `https://${trimmed}`;
 }
 
+/** Remove redundant dates concatenated into location strings */
+function cleanLocationText(loc?: string): string {
+  if (!loc) return '';
+  return loc
+    .replace(/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)?\s*\d{4}\s*[-–—]\s*(?:present|\w+\s*\d{4})?/gi, '')
+    .replace(/^[,\s·•-]+|[,\s·•-]+$/g, '')
+    .trim();
+}
+
 /**
  * Pure Vector PDF Generator:
  * - 100% Vector selectable text (ATS compliant)
@@ -60,69 +69,39 @@ export function generateDirectVectorPdf(cv: CVData, options: VectorPdfOptions = 
   // 1. Header: Name
   const fullName = cv.contact.fullName?.trim() || 'Candidate Name';
   doc.setFont(fontBold, 'bold');
-  doc.setFontSize(19);
-  doc.setTextColor(15, 23, 42); // slate-900
+  doc.setFontSize(20);
+  doc.setTextColor(0, 0, 0); // Pure black
   doc.text(fullName, pageWidth / 2, cursorY, { align: 'center' });
   cursorY += 16;
 
   // Header: Headline / Job Title
   if (cv.contact.jobTitle?.trim()) {
     doc.setFont(fontRegular, isSerif ? 'italic' : 'bold');
-    doc.setFontSize(10.5);
-    doc.setTextColor(29, 78, 216); // blue-700
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0); // Pure black
     doc.text(cv.contact.jobTitle.trim(), pageWidth / 2, cursorY, { align: 'center' });
     cursorY += 14;
   }
 
-  // Header: Contact Row 1 (Email [Clickable mailto:] • Phone [Clickable tel:] • Location)
+  // Header: Location (if available)
+  if (cv.contact.location?.trim()) {
+    doc.setFont(fontRegular, 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(0, 0, 0);
+    doc.text(cv.contact.location.trim(), pageWidth / 2, cursorY, { align: 'center' });
+    cursorY += 12;
+  }
+
+  // Header: Contact Row 1 (Email [Clickable mailto:] • Phone [Clickable tel:])
   const email = cv.contact.email?.trim() || '';
   const phone = cv.contact.phone?.trim() || '';
-  const location = cv.contact.location?.trim() || '';
 
   const contactItems: Array<{ text: string; url?: string }> = [];
-  if (email) {
-    contactItems.push({ text: email, url: `mailto:${email}` });
-  }
   if (phone) {
     contactItems.push({ text: phone, url: `tel:${phone.replace(/[^\d+]/g, '')}` });
   }
-  if (location) {
-    contactItems.push({ text: location });
-  }
-
-  if (contactItems.length > 0) {
-    doc.setFont(fontRegular, 'normal');
-    doc.setFontSize(9);
-
-    const dotStr = '  •  ';
-    const dotWidth = doc.getTextWidth(dotStr);
-
-    let totalWidth = 0;
-    contactItems.forEach((item, idx) => {
-      totalWidth += doc.getTextWidth(item.text);
-      if (idx < contactItems.length - 1) totalWidth += dotWidth;
-    });
-
-    let currentX = (pageWidth - totalWidth) / 2;
-    contactItems.forEach((item, idx) => {
-      const itemWidth = doc.getTextWidth(item.text);
-      if (item.url) {
-        doc.setTextColor(29, 78, 216); // blue-700
-        doc.textWithLink(item.text, currentX, cursorY, { url: item.url });
-      } else {
-        doc.setTextColor(71, 85, 105); // slate-600
-        doc.text(item.text, currentX, cursorY);
-      }
-      currentX += itemWidth;
-
-      if (idx < contactItems.length - 1) {
-        doc.setTextColor(148, 163, 184); // slate-400
-        doc.text(dotStr, currentX, cursorY);
-        currentX += dotWidth;
-      }
-    });
-
-    cursorY += 13;
+  if (email) {
+    contactItems.push({ text: email, url: `mailto:${email}` });
   }
 
   // Header: Contact Row 2 (Clickable Social & Portfolio Links)
@@ -134,52 +113,58 @@ export function generateDirectVectorPdf(cv: CVData, options: VectorPdfOptions = 
         cv.contact.portfolio?.trim() ? { platform: 'Portfolio', url: cv.contact.portfolio.trim() } : null,
       ].filter(Boolean) as Array<{ platform: string; url: string }>;
 
-  if (activeLinks.length > 0) {
+  activeLinks.forEach(link => {
+    const cleanLabel = (link as any).customLabel?.trim() || link.platform || 'Link';
+    contactItems.push({ text: cleanLabel, url: formatUrl(link.url) });
+  });
+
+  if (contactItems.length > 0) {
     doc.setFont(fontRegular, 'normal');
     doc.setFontSize(9);
-    doc.setTextColor(29, 78, 216); // blue-700
 
-    const dotStr = '  •  ';
-    const dotWidth = doc.getTextWidth(dotStr);
+    const pipeStr = '   |   ';
+    const pipeWidth = doc.getTextWidth(pipeStr);
+
     let totalWidth = 0;
-    activeLinks.forEach((link, idx) => {
-      totalWidth += doc.getTextWidth(link.platform || 'Link');
-      if (idx < activeLinks.length - 1) totalWidth += dotWidth;
+    contactItems.forEach((item, idx) => {
+      totalWidth += doc.getTextWidth(item.text);
+      if (idx < contactItems.length - 1) totalWidth += pipeWidth;
     });
 
     let currentX = (pageWidth - totalWidth) / 2;
-    activeLinks.forEach((link, idx) => {
-      const label = link.platform || 'Link';
-      const labelWidth = doc.getTextWidth(label);
-      const targetUrl = formatUrl(link.url);
+    contactItems.forEach((item, idx) => {
+      const itemWidth = doc.getTextWidth(item.text);
+      doc.setTextColor(0, 0, 0); // Pure black
+      if (item.url) {
+        doc.textWithLink(item.text, currentX, cursorY, { url: item.url });
+      } else {
+        doc.text(item.text, currentX, cursorY);
+      }
+      currentX += itemWidth;
 
-      doc.textWithLink(label, currentX, cursorY, { url: targetUrl });
-      currentX += labelWidth;
-
-      if (idx < activeLinks.length - 1) {
-        doc.setTextColor(148, 163, 184); // slate-400
-        doc.text(dotStr, currentX, cursorY);
-        currentX += dotWidth;
-        doc.setTextColor(29, 78, 216);
+      if (idx < contactItems.length - 1) {
+        doc.setTextColor(0, 0, 0);
+        doc.text(pipeStr, currentX, cursorY);
+        currentX += pipeWidth;
       }
     });
 
     cursorY += 15;
   }
 
-  // Section Header Macro
+  // Section Header Macro: Solid black heading with solid black divider rule
   const renderSectionHeading = (title: string) => {
     checkPageBreak(35);
     cursorY += 7;
     doc.setFont(fontBold, 'bold');
-    doc.setFontSize(10.5);
-    doc.setTextColor(15, 23, 42); // slate-900
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0); // Pure black
     doc.text(title.toUpperCase(), marginX, cursorY);
     cursorY += 4;
-    doc.setDrawColor(203, 213, 225); // slate-300
-    doc.setLineWidth(0.75);
+    doc.setDrawColor(0, 0, 0); // Pure black divider
+    doc.setLineWidth(0.85);
     doc.line(marginX, cursorY, marginX + contentWidth, cursorY);
-    cursorY += 10;
+    cursorY += 11;
   };
 
   // Helper to render text with auto-detected inline hyperlinks
@@ -191,7 +176,7 @@ export function generateDirectVectorPdf(cv: CVData, options: VectorPdfOptions = 
       checkPageBreak(12.5);
 
       if (!urlRegex.test(line)) {
-        doc.setTextColor(30, 41, 59);
+        doc.setTextColor(0, 0, 0); // Pure black
         doc.text(line, x, cursorY);
       } else {
         // Line contains link, match and render segments
@@ -203,10 +188,10 @@ export function generateDirectVectorPdf(cv: CVData, options: VectorPdfOptions = 
           const wordWidth = doc.getTextWidth(wordWithSpace);
 
           if (isLink) {
-            doc.setTextColor(29, 78, 216);
+            doc.setTextColor(0, 0, 0); // Pure black with underline
             doc.textWithLink(wordWithSpace, lineX, cursorY, { url: formatUrl(word) });
           } else {
-            doc.setTextColor(30, 41, 59);
+            doc.setTextColor(0, 0, 0);
             doc.text(wordWithSpace, lineX, cursorY);
           }
           lineX += wordWidth;
@@ -234,36 +219,37 @@ export function generateDirectVectorPdf(cv: CVData, options: VectorPdfOptions = 
       renderSectionHeading('Experience');
       cv.experience.forEach((item) => {
         checkPageBreak(36);
-        // Top line: Role (Bold) & Dates
+        // Top line: Role (Bold Black) & Dates (Black Right)
         doc.setFont(fontBold, 'bold');
-        doc.setFontSize(9.8);
-        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
         doc.text(item.role || 'Job Title', marginX, cursorY);
 
         const dateText = `${item.startDate || ''} – ${item.current ? 'Present' : (item.endDate || '')}`.trim();
         if (dateText !== '–') {
           doc.setFont(fontRegular, 'normal');
-          doc.setFontSize(8.8);
-          doc.setTextColor(100, 116, 139);
+          doc.setFontSize(9);
+          doc.setTextColor(0, 0, 0);
           doc.text(dateText, marginX + contentWidth, cursorY, { align: 'right' });
         }
         cursorY += 12;
 
-        // Second line: Company & Location
-        doc.setFont(fontBold, 'bold');
+        // Second line: Company (Italic Black) & Location (Italic Black Right)
+        doc.setFont(fontRegular, 'italic');
         doc.setFontSize(9.2);
-        doc.setTextColor(29, 78, 216); // blue-700
+        doc.setTextColor(0, 0, 0);
         doc.text(item.company || 'Company', marginX, cursorY);
 
-        if (item.location?.trim()) {
-          doc.setFont(fontRegular, 'normal');
-          doc.setFontSize(8.8);
-          doc.setTextColor(100, 116, 139);
-          doc.text(item.location.trim(), marginX + contentWidth, cursorY, { align: 'right' });
+        const cleanLoc = cleanLocationText(item.location);
+        if (cleanLoc) {
+          doc.setFont(fontRegular, 'italic');
+          doc.setFontSize(9);
+          doc.setTextColor(0, 0, 0);
+          doc.text(cleanLoc, marginX + contentWidth, cursorY, { align: 'right' });
         }
         cursorY += 12;
 
-        // Bullets
+        // Bullets: Solid black dots with clean black text
         if (item.bullets && item.bullets.length > 0) {
           doc.setFont(fontRegular, 'normal');
           doc.setFontSize(9);
@@ -271,8 +257,7 @@ export function generateDirectVectorPdf(cv: CVData, options: VectorPdfOptions = 
             if (!bullet.trim()) return;
             checkPageBreak(16);
 
-            // Bullet dot
-            doc.setTextColor(100, 116, 139);
+            doc.setTextColor(0, 0, 0);
             doc.text('•', marginX + 2, cursorY);
 
             renderTextWithInlineLinks(bullet.trim(), marginX + 12, contentWidth - 14);
@@ -287,29 +272,30 @@ export function generateDirectVectorPdf(cv: CVData, options: VectorPdfOptions = 
       cv.education.forEach((item) => {
         checkPageBreak(28);
         doc.setFont(fontBold, 'bold');
-        doc.setFontSize(9.8);
-        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
         doc.text(item.degree || 'Degree', marginX, cursorY);
 
         const dateText = `${item.startDate || ''} – ${item.endDate || ''}`.trim();
         if (dateText !== '–') {
           doc.setFont(fontRegular, 'normal');
-          doc.setFontSize(8.8);
-          doc.setTextColor(100, 116, 139);
+          doc.setFontSize(9);
+          doc.setTextColor(0, 0, 0);
           doc.text(dateText, marginX + contentWidth, cursorY, { align: 'right' });
         }
         cursorY += 12;
 
-        doc.setFont(fontRegular, 'normal');
+        doc.setFont(fontRegular, 'italic');
         doc.setFontSize(9.2);
-        doc.setTextColor(71, 85, 105);
+        doc.setTextColor(0, 0, 0);
         doc.text(item.institution || 'University', marginX, cursorY);
 
-        if (item.location?.trim()) {
-          doc.setFont(fontRegular, 'normal');
-          doc.setFontSize(8.8);
-          doc.setTextColor(100, 116, 139);
-          doc.text(item.location.trim(), marginX + contentWidth, cursorY, { align: 'right' });
+        const cleanLoc = cleanLocationText(item.location);
+        if (cleanLoc) {
+          doc.setFont(fontRegular, 'italic');
+          doc.setFontSize(9);
+          doc.setTextColor(0, 0, 0);
+          doc.text(cleanLoc, marginX + contentWidth, cursorY, { align: 'right' });
         }
         cursorY += 13;
       });
@@ -323,13 +309,13 @@ export function generateDirectVectorPdf(cv: CVData, options: VectorPdfOptions = 
 
         doc.setFont(fontBold, 'bold');
         doc.setFontSize(9.2);
-        doc.setTextColor(15, 23, 42);
+        doc.setTextColor(0, 0, 0);
         const labelText = `${group.label || 'Skills'}: `;
         const labelWidth = doc.getTextWidth(labelText);
         doc.text(labelText, marginX, cursorY);
 
         doc.setFont(fontRegular, 'normal');
-        doc.setTextColor(51, 65, 85);
+        doc.setTextColor(0, 0, 0);
         const skillList = group.skills.join(', ');
         const skillLines = doc.splitTextToSize(skillList, contentWidth - labelWidth - 4);
 
@@ -352,48 +338,61 @@ export function generateDirectVectorPdf(cv: CVData, options: VectorPdfOptions = 
       cv.projects.forEach((item) => {
         checkPageBreak(30);
 
-        // Project Title with Clickable Project Links
+        // Project Title
         doc.setFont(fontBold, 'bold');
-        doc.setFontSize(9.8);
-        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
 
         const projectTitle = item.title || 'Project Title';
         const titleWidth = doc.getTextWidth(projectTitle);
 
         if (item.link?.trim()) {
-          doc.setTextColor(29, 78, 216); // blue-700
           doc.textWithLink(projectTitle, marginX, cursorY, { url: formatUrl(item.link) });
         } else {
           doc.text(projectTitle, marginX, cursorY);
         }
 
+        const techStr = item.technologies && item.technologies.length > 0 ? item.technologies.join(', ') : '';
+        doc.setFont(fontRegular, 'normal');
+        doc.setFontSize(8.5);
+        const techWidth = techStr ? doc.getTextWidth(techStr) : 0;
+        const maxTitleX = marginX + contentWidth - techWidth - 14;
+
         let linkOffsetX = marginX + titleWidth + 6;
 
-        // Render Clickable GitHub Link if available
+        // If title and links would collide with technologies, wrap links to their own line
+        const needsWrap = linkOffsetX + 80 > maxTitleX;
+        if (needsWrap && (item.github?.trim() || item.link?.trim())) {
+          cursorY += 11;
+          linkOffsetX = marginX;
+        }
+
+        // Render Clickable GitHub Link
         if (item.github?.trim()) {
           doc.setFont(fontRegular, 'normal');
           doc.setFontSize(8.5);
-          doc.setTextColor(29, 78, 216);
-          const ghLabel = '[GitHub]';
+          doc.setTextColor(29, 78, 216); // Professional blue for clickable links
+          const ghLabel = 'GitHub ↗';
           doc.textWithLink(ghLabel, linkOffsetX, cursorY, { url: formatUrl(item.github) });
-          linkOffsetX += doc.getTextWidth(ghLabel) + 5;
+          linkOffsetX += doc.getTextWidth(ghLabel) + 6;
         }
 
-        // Render Clickable Live Demo Link if separate from title
+        // Render Clickable Live Demo Link
         if (item.link?.trim() && !projectTitle.includes('http')) {
           doc.setFont(fontRegular, 'normal');
           doc.setFontSize(8.5);
-          doc.setTextColor(29, 78, 216);
-          const demoLabel = '[Live Demo]';
+          doc.setTextColor(29, 78, 216); // Professional blue for clickable links
+          const demoLabel = 'Live Demo ↗';
           doc.textWithLink(demoLabel, linkOffsetX, cursorY, { url: formatUrl(item.link) });
         }
 
-        // Technologies on right
-        if (item.technologies && item.technologies.length > 0) {
+        // Technologies on right (aligned with the first line)
+        if (techStr) {
           doc.setFont(fontRegular, 'normal');
           doc.setFontSize(8.5);
-          doc.setTextColor(100, 116, 139);
-          doc.text(item.technologies.join(', '), marginX + contentWidth, cursorY, { align: 'right' });
+          doc.setTextColor(0, 0, 0);
+          const techY = needsWrap ? cursorY - 11 : cursorY;
+          doc.text(techStr, marginX + contentWidth, techY, { align: 'right' });
         }
         cursorY += 12;
 
@@ -405,7 +404,7 @@ export function generateDirectVectorPdf(cv: CVData, options: VectorPdfOptions = 
             if (!bullet.trim()) return;
             checkPageBreak(16);
 
-            doc.setTextColor(100, 116, 139);
+            doc.setTextColor(0, 0, 0);
             doc.text('•', marginX + 2, cursorY);
 
             renderTextWithInlineLinks(bullet.trim(), marginX + 12, contentWidth - 14);
@@ -413,6 +412,54 @@ export function generateDirectVectorPdf(cv: CVData, options: VectorPdfOptions = 
         }
         cursorY += 4;
       });
+    }
+
+    if (sectionId === 'certifications' && cv.certifications && cv.certifications.length > 0) {
+      renderSectionHeading('Certifications & Courses');
+      cv.certifications.forEach((cert) => {
+        if (!cert.name?.trim()) return;
+        checkPageBreak(24);
+
+        doc.setFont(fontBold, 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        const certName = cert.name.trim();
+        const certNameWidth = doc.getTextWidth(certName);
+
+        if (cert.url?.trim()) {
+          doc.textWithLink(certName, marginX, cursorY, { url: formatUrl(cert.url) });
+        } else {
+          doc.text(certName, marginX, cursorY);
+        }
+
+        // Date on right
+        if (cert.date?.trim()) {
+          doc.setFont(fontRegular, 'normal');
+          doc.setFontSize(9);
+          doc.setTextColor(0, 0, 0);
+          doc.text(cert.date.trim(), marginX + contentWidth, cursorY, { align: 'right' });
+        }
+        cursorY += 12;
+
+        // Issuer + Credential Link
+        doc.setFont(fontRegular, 'italic');
+        doc.setFontSize(9.2);
+        doc.setTextColor(0, 0, 0);
+        const issuerText = cert.issuer?.trim() || 'Verified Credential';
+        doc.text(issuerText, marginX, cursorY);
+
+        if (cert.url?.trim()) {
+          const verifyLabel = '[Verify Credential]';
+          doc.setFont(fontRegular, 'normal');
+          doc.setFontSize(8.5);
+          doc.setTextColor(0, 0, 0);
+          const issuerWidth = doc.getTextWidth(issuerText);
+          doc.textWithLink(verifyLabel, marginX + issuerWidth + 8, cursorY, { url: formatUrl(cert.url) });
+        }
+
+        cursorY += 13;
+      });
+      cursorY += 3;
     }
   });
 

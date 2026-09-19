@@ -64,6 +64,7 @@ export interface ParsedCv {
   github?: string;
   portfolio?: string;
   links?: Array<{ title: string; url: string; type: string }>;
+  socialLinks?: Array<{ id: string; platform: string; url: string }>;
   summary: string;
   filename?: string;
   targetRole?: string;
@@ -72,6 +73,7 @@ export interface ParsedCv {
     id: string;
     company: string;
     role: string;
+    companyUrl?: string;
     startDate: string;
     endDate: string;
     current: boolean;
@@ -108,14 +110,23 @@ export interface ParsedCv {
   projects?: Array<{
     id: string;
     title: string;
-    description: string;
+    description?: string;
     technologies: string[];
     bullets?: string[];
+    github?: string;
+    link?: string;
   }>;
   categorizedSkillGroups?: Array<{
     id: string;
     label: string;
     skills: string[];
+  }>;
+  certificates?: Array<{
+    id: string;
+    name: string;
+    issuer: string;
+    url?: string;
+    date?: string;
   }>;
   atsReport?: {
     score: number;

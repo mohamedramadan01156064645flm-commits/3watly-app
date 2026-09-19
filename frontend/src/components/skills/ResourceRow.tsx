@@ -11,7 +11,7 @@ import { FaYoutube as YoutubeIcon } from 'react-icons/fa6';
 import type { ResourceKind, SkillResource } from '../../types/skills';
 
 const KIND_META: Record<
-  ResourceKind,
+  string,
   {
     Icon: React.ComponentType<{ className?: string }>;
     color: string;
@@ -25,7 +25,7 @@ const KIND_META: Record<
     color: 'text-red-500',
     bg: 'bg-red-50 dark:bg-red-950/40',
     badge: 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400',
-    badgeText: 'YouTube'
+    badgeText: 'Video'
   },
   course: {
     Icon: GraduationCapIcon,
@@ -41,14 +41,44 @@ const KIND_META: Record<
     badge: 'bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300',
     badgeText: 'Docs'
   },
+  article: {
+    Icon: BookOpenIcon,
+    color: 'text-slate-500 dark:text-slate-400',
+    bg: 'bg-slate-100 dark:bg-slate-800/60',
+    badge: 'bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300',
+    badgeText: 'Docs'
+  },
   project: {
     Icon: HammerIcon,
     color: 'text-violet-600 dark:text-violet-400',
     bg: 'bg-violet-50 dark:bg-violet-950/40',
     badge: 'bg-violet-100 dark:bg-violet-900/50 text-violet-600 dark:text-violet-400',
     badgeText: 'Project'
+  },
+  repo: {
+    Icon: HammerIcon,
+    color: 'text-violet-600 dark:text-violet-400',
+    bg: 'bg-violet-50 dark:bg-violet-950/40',
+    badge: 'bg-violet-100 dark:bg-violet-900/50 text-violet-600 dark:text-violet-400',
+    badgeText: 'Project'
+  },
+  practice: {
+    Icon: HammerIcon,
+    color: 'text-amber-600 dark:text-amber-400',
+    bg: 'bg-amber-50 dark:bg-amber-950/40',
+    badge: 'bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400',
+    badgeText: 'Practice'
+  },
+  book: {
+    Icon: BookOpenIcon,
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    badge: 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400',
+    badgeText: 'Book'
   }
 };
+
+const DEFAULT_KIND_META = KIND_META.docs;
 
 export function ResourceRow({
   resource,
@@ -57,7 +87,8 @@ export function ResourceRow({
   resource: SkillResource;
   skillName: string;
 }) {
-  const { Icon, color, bg, badge, badgeText } = KIND_META[resource.kind];
+  const meta = KIND_META[resource?.kind] || DEFAULT_KIND_META;
+  const { Icon, color, bg, badge, badgeText } = meta;
 
   const handleClick = () => {
     const targetUrl = resource.url || (

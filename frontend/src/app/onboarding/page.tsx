@@ -11,7 +11,7 @@ export default function OnboardingIndexPage() {
   }, [router]);
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-[#FBFCFE] dark:bg-[#060913]">
+    <div className="flex min-h-screen w-full items-center justify-center bg-[#FBFCFE] dark:bg-[#040816]">
       <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#1B57E0] border-t-transparent" />
     </div>
   );

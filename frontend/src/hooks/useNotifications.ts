@@ -24,11 +24,11 @@ export interface JobNotification {
 }
 
 /** Maximum age of notifications to display (in days). */
-const NOTIFICATION_RETENTION_DAYS = 7;
+const NOTIFICATION_RETENTION_DAYS = 14;
 
 /**
- * Build a per-user localStorage key so read/unread state is fully isolated
- * between different user accounts on the same browser/device.
+ * Build a per-user localStorage key so read/unread state is isolated
+ * between different user accounts while also syncing with a global fallback.
  */
 function getStorageKey(userId: string | undefined): string {
   if (userId) return `3watly_read_notifications_${userId}`;
@@ -37,22 +37,12 @@ function getStorageKey(userId: string | undefined): string {
 
 /**
  * Calculate the cutoff date for the notification display window.
- * Combines two rules:
- *   1. Never show notifications older than NOTIFICATION_RETENTION_DAYS (7 days)
- *   2. Never show notifications posted before the user signed up
- * Returns the MORE RECENT of the two dates as an ISO string.
+ * Returns the retention cutoff (last 14 days) so newly scraped active jobs
+ * are always presented to the candidate.
  */
-function getNotificationCutoff(userCreatedAt: string | undefined): string {
+function getNotificationCutoff(): string {
   const now = new Date();
   const retentionCutoff = new Date(now.getTime() - NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-
-  if (userCreatedAt) {
-    const signupDate = new Date(userCreatedAt);
-    // Use whichever is MORE recent — the 7-day window or the signup date
-    const cutoff = signupDate > retentionCutoff ? signupDate : retentionCutoff;
-    return cutoff.toISOString();
-  }
-
   return retentionCutoff.toISOString();
 }
 
@@ -65,17 +55,23 @@ export function useNotifications() {
   // Per-user storage key — changes when user changes
   const storageKey = getStorageKey(user?.id);
 
-  // Helper to get read IDs from per-user localStorage
+  // Helper to get read IDs from both per-user and global localStorage
   const getReadIds = useCallback((): Set<string> => {
     if (typeof window === 'undefined') return new Set();
+    const ids = new Set<string>();
     try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return new Set(parsed);
+      const rawUser = localStorage.getItem(storageKey);
+      if (rawUser) {
+        const parsed = JSON.parse(rawUser);
+        if (Array.isArray(parsed)) parsed.forEach(id => ids.add(String(id)));
+      }
+      const rawGlobal = localStorage.getItem('3watly_read_notifications_global');
+      if (rawGlobal) {
+        const parsed = JSON.parse(rawGlobal);
+        if (Array.isArray(parsed)) parsed.forEach(id => ids.add(String(id)));
       }
     } catch {}
-    return new Set();
+    return ids;
   }, [storageKey]);
 
   // Fetch real matched jobs from the live database
@@ -83,8 +79,9 @@ export function useNotifications() {
     try {
       setLoading(true);
 
-      // Extract candidate skills from parsed CV in storage if available
+      // Extract candidate skills and target role from parsed CV or active CV versions
       let userSkills = '';
+      let targetRole = '';
       if (typeof window !== 'undefined') {
         try {
           const parsed = localStorage.getItem('3watly_parsed_cv');
@@ -93,19 +90,36 @@ export function useNotifications() {
             if (Array.isArray(data.skills) && data.skills.length > 0) {
               userSkills = data.skills.join(',');
             }
+            targetRole = data.targetRole || data.currentTitle || '';
+          }
+          if (!userSkills) {
+            const versionsRaw = localStorage.getItem('3watly_cv_versions');
+            if (versionsRaw) {
+              const vers = JSON.parse(versionsRaw);
+              if (Array.isArray(vers) && vers[0]?.cvData?.skills) {
+                const sList: string[] = [];
+                vers[0].cvData.skills.forEach((g: any) => {
+                  if (Array.isArray(g.skills)) sList.push(...g.skills);
+                });
+                if (sList.length > 0) userSkills = sList.join(',');
+              }
+              if (!targetRole && vers?.[0]?.targetRole) {
+                targetRole = vers[0].targetRole;
+              }
+            }
           }
         } catch {}
       }
 
-      // Calculate the cutoff: max(7 days ago, user signup date)
-      const cutoff = getNotificationCutoff(user?.createdAt);
+      const cutoff = getNotificationCutoff();
 
       const params = new URLSearchParams({
-        limit: '10',
+        limit: '100',
         sortBy: 'recent',
-        postedAfter: cutoff, // Server-side filter: only jobs posted after cutoff
+        postedAfter: cutoff,
       });
       if (userSkills) params.set('skills', userSkills);
+      if (targetRole) params.set('targetRole', targetRole);
 
       const res = await fetch(`/api/jobs?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch job notifications');
@@ -115,7 +129,17 @@ export function useNotifications() {
 
       const readIds = getReadIds();
 
-      const notifs: JobNotification[] = jobs.slice(0, 8).map((job) => {
+      // Only notify for jobs that actually match the candidate (matchScore >= 50%),
+      // sorted by match score descending so top opportunities are highlighted first
+      const matchedJobs = jobs
+        .filter(j => (j.matchScore || 0) >= 50)
+        .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+
+      const finalJobs = matchedJobs.length > 0
+        ? matchedJobs
+        : jobs.filter(j => (j.matchScore || 0) >= 35).sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+
+      const notifs: JobNotification[] = finalJobs.slice(0, 8).map((job) => {
         const notifId = `notif_${job.id}`;
         const isRead = readIds.has(notifId);
 
@@ -147,11 +171,35 @@ export function useNotifications() {
     } finally {
       setLoading(false);
     }
-  }, [getReadIds, user?.createdAt]);
+  }, [getReadIds]);
 
-  // Refetch when the user changes (login/logout/switch account)
+  // Initial fetch and refetch when user changes
   useEffect(() => {
     fetchNotifications();
+  }, [fetchNotifications, user?.id]);
+
+  // Periodic polling every 60s & on window focus / custom events
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const intervalId = setInterval(() => {
+      fetchNotifications();
+    }, 60000);
+
+    const onFocus = () => fetchNotifications();
+    // Defer event-triggered fetches by one tick to prevent "setState during render" React warnings
+    const onJobsUpdated = () => setTimeout(() => fetchNotifications(), 0);
+
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('3watly_jobs_updated', onJobsUpdated);
+    window.addEventListener('3watly_active_cv_changed', onJobsUpdated);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('3watly_jobs_updated', onJobsUpdated);
+      window.removeEventListener('3watly_active_cv_changed', onJobsUpdated);
+    };
   }, [fetchNotifications]);
 
   const markAsRead = useCallback((notificationId: string) => {
@@ -161,7 +209,9 @@ export function useNotifications() {
     try {
       const readIds = getReadIds();
       readIds.add(notificationId);
-      localStorage.setItem(storageKey, JSON.stringify(Array.from(readIds)));
+      const arr = Array.from(readIds);
+      localStorage.setItem(storageKey, JSON.stringify(arr));
+      localStorage.setItem('3watly_read_notifications_global', JSON.stringify(arr));
     } catch {}
   }, [getReadIds, storageKey]);
 
@@ -170,7 +220,9 @@ export function useNotifications() {
     try {
       const readIds = getReadIds();
       notifications.forEach((n) => readIds.add(n.id));
-      localStorage.setItem(storageKey, JSON.stringify(Array.from(readIds)));
+      const arr = Array.from(readIds);
+      localStorage.setItem(storageKey, JSON.stringify(arr));
+      localStorage.setItem('3watly_read_notifications_global', JSON.stringify(arr));
     } catch {}
   }, [notifications, getReadIds, storageKey]);
 

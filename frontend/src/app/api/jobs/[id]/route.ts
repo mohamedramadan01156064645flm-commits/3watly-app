@@ -7,8 +7,10 @@ import {
   cleanEnglishResponsibilities,
   cleanArabicResponsibilities,
   cleanEnglishRequirements,
-  cleanArabicRequirements
+  cleanArabicRequirements,
+  partitionResponsibilitiesAndRequirements
 } from '@/utils/jobLocalization';
+import { computeJobMatch } from '@/utils/jobMatching';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -39,22 +41,30 @@ function normalizeWorkType(raw: string | null, isRemote: boolean): JobItem['work
 function timeAgo(dateStr: string | null): { en: string; ar: string } {
   if (!dateStr) return { en: 'Recently', ar: 'مؤخراً' };
   try {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    if (diff < 0) return { en: 'Just now', ar: 'الآن' };
+    const time = new Date(dateStr).getTime();
+    if (isNaN(time)) return { en: 'Recently', ar: 'مؤخراً' };
+    const diff = Math.max(0, Date.now() - time);
+    const minutes = Math.floor(diff / 60_000);
     const hours = Math.floor(diff / 3_600_000);
-    if (hours < 1) return { en: 'Just now', ar: 'الآن' };
+    const days = Math.floor(diff / 86_400_000);
+
+    if (minutes < 2) return { en: 'Just now', ar: 'الآن' };
+    if (minutes < 60) return { en: `${minutes}m ago`, ar: `منذ ${minutes} دقيقة` };
     if (hours === 1) return { en: '1h ago', ar: 'منذ ساعة' };
     if (hours === 2) return { en: '2h ago', ar: 'منذ ساعتين' };
+    if (hours >= 3 && hours <= 10) return { en: `${hours}h ago`, ar: `منذ ${hours} ساعات` };
     if (hours < 24) return { en: `${hours}h ago`, ar: `منذ ${hours} ساعة` };
-    const days = Math.round(hours / 24);
-    if (days <= 1) return { en: '1d ago', ar: 'منذ يوم' };
+
+    if (days === 1) return { en: '1d ago', ar: 'منذ يوم' };
     if (days === 2) return { en: '2d ago', ar: 'منذ يومين' };
-    if (days <= 10) return { en: `${days}d ago`, ar: `منذ ${days} أيام` };
-    if (days <= 30) return { en: `${days}d ago`, ar: `منذ ${days} يوم` };
-    const months = Math.round(days / 30);
-    if (months <= 1) return { en: '1mo ago', ar: 'منذ شهر' };
+    if (days >= 3 && days <= 10) return { en: `${days}d ago`, ar: `منذ ${days} أيام` };
+    if (days < 30) return { en: `${days}d ago`, ar: `منذ ${days} يوماً` };
+
+    const months = Math.floor(days / 30);
+    if (months === 1) return { en: '1mo ago', ar: 'منذ شهر' };
     if (months === 2) return { en: '2mo ago', ar: 'منذ شهرين' };
-    return { en: `${months}mo ago`, ar: `منذ ${months} أشهر` };
+    if (months >= 3 && months <= 10) return { en: `${months}mo ago`, ar: `منذ ${months} أشهر` };
+    return { en: `${months}mo ago`, ar: `منذ ${months} شهراً` };
   } catch {
     return { en: 'Recently', ar: 'مؤخراً' };
   }
@@ -64,9 +74,10 @@ function timeAgo(dateStr: string | null): { en: string; ar: string } {
 function extractExperienceYears(row: any): { en: string; ar: string } {
   const fullText = `${row.title || ''} ${row.description || ''} ${row.requirements || ''}`;
 
-  // 1. Check ranges: "3-5 years", "3 to 6 Yrs", "· 3 - 5 Yrs of Exp ·", "من 3 الى 5 سنوات"
-  const rangeMatch = fullText.match(/(\d+)\s*(?:-|to|إلى|الي)\s*(\d+)\s*(?:years?|yrs?|سنوات|سنة)/i) ||
-                     fullText.match(/·?\s*(\d+)\s*-\s*(\d+)\s*Yrs of Exp/i);
+  // 1. Check ranges: "1 to 5 years", "2–5 years", "3-5 years", "3 to 6 Yrs", "من 1 الى 5 سنوات"
+  const rangeMatch = fullText.match(/(\d+)\s*(?:[-–—~]|to|إلى|الي|وحتى|حتى)\s*(\d+)\s*(?:years?|yrs?|سنوات|سنة|عام)/i) ||
+                     fullText.match(/·?\s*(\d+)\s*[-–—~]\s*(\d+)\s*Yrs of Exp/i) ||
+                     fullText.match(/(?:experience needed|خبرة مطلوبة|خبرة)\s*:\s*(\d+)\s*(?:[-–—~]|to|إلى|الي)\s*(\d+)/i);
   if (rangeMatch) {
     const min = parseInt(rangeMatch[1], 10);
     const max = parseInt(rangeMatch[2], 10);
@@ -78,8 +89,10 @@ function extractExperienceYears(row: any): { en: string; ar: string } {
     }
   }
 
-  // 2. Check plus expressions: "6+ years", "+6 years", "more than 5 years", "at least 6 years", "خبرة 6 سنوات", "خبرة لا تقل عن 6 سنوات"
-  const plusMatch = fullText.match(/(?:at least|minimum|more than|min\.?|over|\+)?\s*(\d+)\s*\+?\s*(?:years?|yrs?|سنوات|سنة)\s*(?:of experience|experience|\+)?/i) ||
+  // 2. Check plus expressions: "6+ years", "+6 years", "more than 5 years", "at least 6 years"
+  // Negative lookbehind ensures it is NOT the tail end of a range like "1-5 years" or "2–5 years"
+  const plusMatch = fullText.match(/(?<!\d\s*[-–—~]\s*)(?:at least|minimum|more than|min\.?|over|\+)\s*(\d+)\s*(?:years?|yrs?|سنوات|سنة)/i) ||
+                    fullText.match(/(?<!\d\s*[-–—~]\s*)(\d+)\s*\+\s*(?:years?|yrs?|سنوات|سنة)/i) ||
                     fullText.match(/(?:خبرة\s*(?:لا تقل عن|\+)?\s*)(\d+)\s*(?:سنوات|سنة)/i);
   if (plusMatch) {
     const years = parseInt(plusMatch[1], 10);
@@ -91,10 +104,10 @@ function extractExperienceYears(row: any): { en: string; ar: string } {
     }
   }
 
-  // 3. Seniority & title fallback
+  // 3. Seniority & title fallback (strict non-manager check)
   const senior = row.seniority || '';
   const title = (row.title || '').toLowerCase();
-  if (senior === 'Senior' || /senior|lead|principal|head|manager|director|expert/i.test(title)) {
+  if (senior === 'Senior' || /(?<!non[- ])manager|senior|lead|principal|director|head of/i.test(title)) {
     return { en: '5+ years', ar: '+٥ سنوات' };
   }
   if (senior === 'Fresh' || /fresh|intern|entry|trainee/i.test(title)) {
@@ -104,7 +117,7 @@ function extractExperienceYears(row: any): { en: string; ar: string } {
     return { en: '1 - 3 years', ar: '١ - ٣ سنوات' };
   }
 
-  return { en: '2 - 4 years', ar: '٢ - ٤ سنوات' };
+  return { en: '1 - 5 years', ar: '١ - ٥ سنوات' };
 }
 
 function parseSkillsArray(raw: unknown): string[] {
@@ -130,14 +143,12 @@ const JOBS_SKILL_BLACKLIST = new Set([
   'analyst/research', 'analyst / research', 'analysis', 'research',
   'computer science', 'it/software development', 'engineering - telecom/technology',
   'customer service/support', 'customer service', 'support',
-  'sales/retail', 'sales', 'retail', 'accounting/finance', 'accounting', 'finance',
-  'project/program management', 'project management', 'program management',
-  'administration', 'human resources', 'marketing/pr/advertising',
+  'retail',
   'communication', 'teamwork', 'leadership', 'presentation skills', 'interpersonal skills',
-  'problem solving', 'critical thinking', 'analytical skills', 'analytical thinking',
+  'problem solving', 'critical thinking',
   'work under pressure', 'attention to detail', 'time management', 'multitasking',
-  'data analysis', 'business analysis', 'data analytics', 'market research', 'quantitative analysis'
 ]);
+
 
 const SKILL_EXPANSION: Record<string, string> = {
   'bi': 'Business Intelligence', 'ai': 'Machine Learning', 'ml': 'Machine Learning',
@@ -198,40 +209,11 @@ function cleanAndFilterSkills(rawSkills: string[]): string[] {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapRowToJobItem(row: any, userSkills: string[], targetRole: string = ''): JobItem {
-  const reqSkills = cleanAndFilterSkills(parseSkillsArray(row.required_skills));
-
-  const matchedSkills = reqSkills
-    .filter((s) => isSkillMatchedByUser(s, userSkills))
-    .map((s) => ({ name: s, weight: 0.8 }));
-
-  const missingSkills = reqSkills
-    .filter((s) => !isSkillMatchedByUser(s, userSkills))
-    .map((s, idx) => {
-      const demandBase = Math.max(25, Math.min(75, 60 - idx * 7));
-      return {
-        name: s,
-        weight: parseFloat(((reqSkills.length - idx) / Math.max(reqSkills.length, 1)).toFixed(2)),
-        marketNote: `Found in ${demandBase}% of similar Cairo jobs`,
-        marketNoteAr: `موجودة في ${demandBase}% من وظائف القاهرة المشابهة`,
-      };
-    });
-
-  const titleLower = (row.title || '').toLowerCase();
-  let roleBoost = 0;
-  if (targetRole) {
-    if (targetRole.includes('data') && (titleLower.includes('data') || titleLower.includes('bi') || titleLower.includes('analytics'))) {
-      roleBoost = 15;
-    } else if (targetRole.includes('frontend') && (titleLower.includes('frontend') || titleLower.includes('react') || titleLower.includes('web'))) {
-      roleBoost = 15;
-    } else if (targetRole.includes('backend') && (titleLower.includes('backend') || titleLower.includes('node') || titleLower.includes('api'))) {
-      roleBoost = 15;
-    }
-  }
-
-  const matchRatio = reqSkills.length > 0 ? (matchedSkills.length / reqSkills.length) : 0.8;
-  const baseMatch = Math.round(matchRatio * 75 + 15 + roleBoost);
-  const matchScore = Math.min(98, Math.max(55, baseMatch));
+function mapRowToJobItem(row: any, userSkills: string[], targetRole: string = ''): JobItem & { rawDescription?: string; rawRequirements?: string } {
+  const matchResult = computeJobMatch(row, userSkills, targetRole);
+  const matchedSkills = matchResult.matchedSkills;
+  const missingSkills = matchResult.missingSkills;
+  const matchScore = matchResult.matchScore;
 
   const wt = normalizeWorkType(row.work_type, !!row.is_remote);
   const senior: JobItem['seniority'] =
@@ -244,28 +226,24 @@ function mapRowToJobItem(row: any, userSkills: string[], targetRole: string = ''
   const expYearsEn = expYears.en;
   const expYearsAr = expYears.ar;
 
-  // Parse description and requirements into bullet arrays
-  const descLines = (row.description || '')
-    .split(/\n|•|\.(?=\s[A-Z]|$)/)
-    .map((s: string) => s.trim())
-    .filter((s: string) => s.length > 5);
+  // Extract structured responsibilities and requirements (supporting both HTML lists and plain text)
+  const partitioned = partitionResponsibilitiesAndRequirements(row.requirements, row.description);
+  const descLines = partitioned.responsibilities.length > 0
+    ? partitioned.responsibilities
+    : (row.description || '')
+        .split(/\n|•|\.(?=\s[A-Z]|$)/)
+        .map((s: string) => s.trim())
+        .filter((s: string) => s.length > 5);
 
-  const reqLines = (row.requirements || '')
-    .split(/\n|•|\.(?=\s[A-Z]|$)/)
-    .map((s: string) => s.trim())
-    .filter((s: string) => s.length > 5);
+  const reqLines = partitioned.requirements.length > 0
+    ? partitioned.requirements
+    : (row.requirements || '')
+        .split(/\n|•|\.(?=\s[A-Z]|$)/)
+        .map((s: string) => s.trim())
+        .filter((s: string) => s.length > 5);
 
-  const responsibilitiesFallback = [
-    `Work on core ${row.title} tasks`,
-    `Collaborate with cross-functional teams`,
-    `Deliver high-quality results in ${row.location || 'Egypt'}`,
-    `Continuously improve processes and workflows`,
-    `Communicate progress to stakeholders`,
-  ];
+  const reqSkills = (row.required_skills && Array.isArray(row.required_skills)) ? row.required_skills : [];
 
-  const requirementsFallback = reqSkills.length > 0
-    ? reqSkills.map((s) => `Strong experience with ${s}`)
-    : [`Relevant experience in the field`, `Strong analytical skills`, `Team player with good communication`];
 
   return {
     id: row.id,
@@ -292,9 +270,10 @@ function mapRowToJobItem(row: any, userSkills: string[], targetRole: string = ''
       ? row.salary_range
       : 'تحدد أثناء المقابلة',
     matchScore,
+    postedAt: row.posted_at || null,
     postedAgo: posted.en,
     postedAgoAr: posted.ar,
-    applicantsCount: row.applicants_count || Math.floor(Math.random() * 40) + 5,
+    applicantsCount: typeof row.applicants_count === 'number' ? row.applicants_count : null,
     department: row.department || row.category || 'Technology',
     departmentAr: row.department_ar || row.category_ar || 'التكنولوجيا',
     education: row.education || "Bachelor's",
@@ -309,6 +288,8 @@ function mapRowToJobItem(row: any, userSkills: string[], targetRole: string = ''
     responsibilitiesAr: cleanArabicResponsibilities(row.title_ar || row.title, descLines, reqSkills),
     requirements: cleanEnglishRequirements(row.title, reqLines, reqSkills),
     requirementsAr: cleanArabicRequirements(row.title_ar || row.title, reqLines, reqSkills),
+    rawDescription: row.description || '',
+    rawRequirements: row.requirements || '',
   };
 }
 
@@ -320,9 +301,10 @@ export async function GET(
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const userSkillsParam = searchParams.get('skills') || '';
+    const targetRole = searchParams.get('targetRole') || '';
     const userSkills = userSkillsParam
-      ? userSkillsParam.split(',').map((s) => s.trim().toLowerCase())
-      : ['sql', 'python', 'power bi', 'excel', 'data modeling', 'tableau', 'react', 'git'];
+      ? userSkillsParam.split(',').map((s) => s.trim())
+      : [];
 
     const supabase = await createClient();
 
@@ -334,7 +316,7 @@ export async function GET(
         .maybeSingle();
 
       if (!error && row) {
-        const job = mapRowToJobItem(row, userSkills);
+        const job = mapRowToJobItem(row, userSkills, targetRole);
 
         // Fetch similar jobs (same company or overlapping skills)
         const { data: similar } = await supabase
@@ -344,7 +326,7 @@ export async function GET(
           .order('posted_at', { ascending: false })
           .limit(4);
 
-        const similarMapped = (similar || []).map((s) => mapRowToJobItem(s, userSkills));
+        const similarMapped = (similar || []).map((s) => mapRowToJobItem(s, userSkills, targetRole));
 
         return NextResponse.json({ job, similarJobs: similarMapped });
       }

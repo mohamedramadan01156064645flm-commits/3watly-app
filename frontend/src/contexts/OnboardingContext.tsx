@@ -33,12 +33,158 @@ interface OnboardingState {
   reset: () => void;
 }
 
+function syncParsedCvToCVBuilder(finalParsedCv: ParsedCv, userFullName?: string, userId?: string) {
+  if (!userId) return;
+  if (typeof window === 'undefined') return;
+
+  const roleTitle = finalParsedCv.currentTitle || finalParsedCv.targetRole || finalParsedCv.experiences?.[0]?.role || 'Professional';
+
+  const adaptedProjects = (finalParsedCv.projects || []).map((p, idx) => ({
+    id: p.id || `prj-${idx + 1}`,
+    title: p.title || `Project ${idx + 1}`,
+    technologies: Array.isArray(p.technologies) ? p.technologies : [],
+    github: p.github || '',
+    link: p.link || '',
+    bullets: Array.isArray(p.bullets) && p.bullets.length > 0
+      ? p.bullets
+      : (p.description ? [p.description] : [])
+  }));
+
+  const adaptedExperiences = (finalParsedCv.experiences || []).map((exp, idx) => ({
+    id: exp.id || `exp-${idx + 1}`,
+    role: exp.role || finalParsedCv.currentTitle || 'Professional',
+    company: exp.company || '',
+    companyUrl: exp.companyUrl || '',
+    startDate: exp.startDate || '',
+    endDate: exp.endDate || 'Present',
+    current: Boolean(exp.current),
+    location: exp.location || finalParsedCv.location || '',
+    bullets: Array.isArray(exp.bullets) ? exp.bullets : []
+  }));
+
+  const rawEduList = (finalParsedCv.educationHistory && finalParsedCv.educationHistory.length > 0)
+    ? finalParsedCv.educationHistory
+    : (finalParsedCv.education ? [{
+        id: 'edu-1',
+        degree: finalParsedCv.education.degree,
+        institution: finalParsedCv.education.school,
+        startDate: finalParsedCv.education.period?.split('—')?.[0]?.trim() || '',
+        endDate: finalParsedCv.education.period?.split('—')?.[1]?.trim() || '',
+        location: finalParsedCv.location || '',
+        major: ''
+      }] : []);
+
+  const adaptedEducation = rawEduList.map((edu: any, idx: number) => ({
+    id: edu.id || `edu-${idx + 1}`,
+    degree: edu.degree || 'Bachelor Degree',
+    institution: edu.institution || edu.school || '',
+    startDate: edu.startDate || '',
+    endDate: edu.endDate || edu.period || '',
+    location: edu.location || finalParsedCv.location || '',
+    major: edu.major || ''
+  }));
+
+  let adaptedSkills: Array<{ id: string; label: string; skills: string[] }> = [];
+  if (Array.isArray(finalParsedCv.categorizedSkillGroups) && finalParsedCv.categorizedSkillGroups.length > 0) {
+    adaptedSkills = finalParsedCv.categorizedSkillGroups.map((g: any, idx: number) => ({
+      id: g.id || `skill-g-${idx + 1}`,
+      label: g.label || 'Technical Skills',
+      skills: Array.isArray(g.skills) ? g.skills : []
+    }));
+  } else if (finalParsedCv.skills && finalParsedCv.skills.length > 0) {
+    adaptedSkills = [{ id: 'tech-1', label: 'Technical Skills', skills: finalParsedCv.skills }];
+  }
+
+  const parsedSocialLinks: Array<{ id: string; platform: any; url: string }> = [];
+  if (Array.isArray(finalParsedCv.socialLinks) && finalParsedCv.socialLinks.length > 0) {
+    finalParsedCv.socialLinks.forEach((sl: any, idx: number) => {
+      if (sl.url && !parsedSocialLinks.some((l) => l.url.toLowerCase() === sl.url.toLowerCase())) {
+        parsedSocialLinks.push({
+          id: sl.id || `link-${idx + 1}`,
+          platform: sl.platform || 'Other',
+          url: sl.url
+        });
+      }
+    });
+  }
+
+  // Fallbacks if not in socialLinks
+  if (!parsedSocialLinks.some(s => s.platform === 'LinkedIn') && finalParsedCv.linkedin) {
+    parsedSocialLinks.push({ id: 'link-li', platform: 'LinkedIn', url: finalParsedCv.linkedin });
+  }
+  if (!parsedSocialLinks.some(s => s.platform === 'GitHub') && finalParsedCv.github) {
+    parsedSocialLinks.push({ id: 'link-gh', platform: 'GitHub', url: finalParsedCv.github });
+  }
+  if (!parsedSocialLinks.some(s => s.platform === 'Portfolio') && finalParsedCv.portfolio) {
+    parsedSocialLinks.push({ id: 'link-pf', platform: 'Portfolio', url: finalParsedCv.portfolio });
+  }
+
+  const convertedCvData = {
+    contact: {
+      fullName: finalParsedCv.fullName || userFullName || '',
+      jobTitle: finalParsedCv.currentTitle || roleTitle,
+      email: finalParsedCv.email || '',
+      phone: finalParsedCv.phone || '',
+      location: finalParsedCv.location || '',
+      linkedin: finalParsedCv.linkedin || '',
+      github: finalParsedCv.github || '',
+      portfolio: finalParsedCv.portfolio || '',
+      socialLinks: parsedSocialLinks
+    },
+    summary: finalParsedCv.summary || '',
+    experience: adaptedExperiences,
+    education: adaptedEducation,
+    projects: adaptedProjects,
+    skills: adaptedSkills,
+    sectionOrder: ['summary', 'experience', 'education', 'skills', 'projects'] as any,
+    hiddenSections: [] as any,
+    skillsSummary: null
+  };
+
+  const newVersionId = `ver-${Date.now()}`;
+  const newPrimaryVersion = {
+    id: newVersionId,
+    name: finalParsedCv.fullName ? `${finalParsedCv.fullName} (الأساسية)` : 'سيرتي الذاتية (الأساسية)',
+    targetRole: roleTitle,
+    cvData: convertedCvData,
+    templateId: 'ats-classic',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    isActive: true,
+    atsScore: finalParsedCv.atsReport?.score
+  };
+
+  try {
+    const existingVersJson = localStorage.getItem(`3watly_cv_versions_${userId}`);
+    let existingVers: any[] = [];
+    if (existingVersJson) {
+      try {
+        const parsed = JSON.parse(existingVersJson);
+        if (Array.isArray(parsed)) existingVers = parsed;
+      } catch {}
+    }
+    const otherVers = existingVers.map((v: any) => ({ ...v, isActive: false }));
+    const updatedVersions = [newPrimaryVersion, ...otherVers];
+    localStorage.setItem(`3watly_cv_versions_${userId}`, JSON.stringify(updatedVersions));
+    localStorage.setItem(`3watly_active_cv_id_${userId}`, newVersionId);
+    localStorage.setItem(`3watly_cv_draft_${userId}`, JSON.stringify(convertedCvData));
+    localStorage.setItem(`3watly_target_role_${userId}`, roleTitle);
+  } catch (storageErr) {
+    console.warn('Failed to sync to 3watly_cv_versions:', storageErr);
+  }
+
+  try {
+    window.dispatchEvent(new CustomEvent('3watly_active_cv_changed', { detail: newPrimaryVersion }));
+    window.dispatchEvent(new CustomEvent('3watly_parsed_cv_updated', { detail: finalParsedCv }));
+  } catch {}
+}
+
 const OnboardingContext = createContext<OnboardingState | null>(null);
 
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
-  const { user, updateFullName, updateTargetRole, setOnboardingCompleted } = useAuth();
+  const { user, updateFullName, updateTargetRole, updateExperience, setOnboardingCompleted } = useAuth();
   const [role, setRole] = useState<RoleId | null>('data-analyst');
-  const [experience, setExperience] = useState('1-3 Years');
+  const [experience, setExperienceState] = useState('Fresh Graduate');
   const [locations, setLocations] = useState<string[]>(['Cairo', 'Giza', 'Remote']);
   const [file, setFile] = useState<UploadedFile | null>(null);
   const [status, setStatus] = useState<ParseStatus>('idle');
@@ -53,20 +199,31 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const [quickSkills, setQuickSkills] = useState<string[]>([]);
   const [careerGoal, setCareerGoal] = useState('first-job');
 
+  const setExperience = useCallback((val: string) => {
+    setExperienceState(val);
+    try {
+      localStorage.setItem(`3watly_experience_${user?.id}`, val);
+    } catch {}
+  }, []);
+
   // Restore onboarding and parsed CV from localStorage on mount
   useEffect(() => {
     try {
-      const savedCv = localStorage.getItem('3watly_parsed_cv');
+      const savedCv = localStorage.getItem(`3watly_parsed_cv_${user?.id}`);
       if (savedCv) {
         const parsed = JSON.parse(savedCv);
         setParsedCv(parsed);
         setStatus('complete');
         setProgress(100);
-        setChecksRevealed(3);
+        setChecksRevealed(4);
       }
-      const savedRole = localStorage.getItem('3watly_role');
+      const savedRole = localStorage.getItem(`3watly_role_${user?.id}`);
       if (savedRole) {
         setRole(savedRole as RoleId);
+      }
+      const savedExp = localStorage.getItem(`3watly_experience_${user?.id}`);
+      if (savedExp) {
+        setExperienceState(savedExp);
       }
     } catch (e) {
       console.warn('Error loading onboarding state:', e);
@@ -91,21 +248,22 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     setChecksRevealed(0);
     setSkillsAdded(0);
     setParsedCv(null);
-    localStorage.removeItem('3watly_parsed_cv');
+    localStorage.removeItem(`3watly_parsed_cv_${user?.id}`);
   }, [previewUrl]);
 
   const selectRole = useCallback((next: RoleId) => {
     setRole(next);
-    localStorage.setItem('3watly_role', next);
+    localStorage.setItem(`3watly_role_${user?.id}`, next);
     updateTargetRole(next.replace(/-/g, ' '));
   }, [updateTargetRole]);
 
   const reset = useCallback(() => {
     removeFile();
     setRole('data-analyst');
-    setExperience('1-3 Years');
+    setExperienceState('Fresh Graduate');
     setLocations(['Cairo', 'Giza', 'Remote']);
-    localStorage.removeItem('3watly_role');
+    localStorage.removeItem(`3watly_role_${user?.id}`);
+    localStorage.removeItem(`3watly_experience_${user?.id}`);
   }, [removeFile]);
 
   // Real CV Upload & Parsing Handler
@@ -126,8 +284,6 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       }
 
       try {
-        // Stage 1: Progress step
-        await new Promise((r) => setTimeout(r, 400));
         setProgress(35);
         setStageMessage('Reading document structure and layout...');
         setChecksRevealed(1);
@@ -140,7 +296,8 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
           const blob = new Blob([nextFile.name], { type: 'text/plain' });
           formData.append('file', blob, nextFile.name);
         }
-        if (role) formData.append('targetRole', role);
+        // Only send targetRole if explicitly selected and not the placeholder default
+        if (role && role !== 'data-analyst') formData.append('targetRole', role);
 
         // Stage 2: Entity extraction
         setProgress(60);
@@ -172,7 +329,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
           name: s
         }));
 
-        // Resolve the human-readable role title from the selected role ID
+        // Resolve the human-readable role title from the detected currentTitle first, then selected role
         const roleLabels: Record<string, string> = {
           'data-analyst':      'Data Analyst',
           'data-engineer':     'Data Engineer',
@@ -180,11 +337,11 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
           'ml-engineer':       'Machine Learning Engineer',
           'devops':            'DevOps Engineer',
         };
-        const resolvedTitle = data.targetRole || (role ? roleLabels[role] : '') || '';
+        const resolvedTitle = data.currentTitle || data.targetRole || (role && role !== 'data-analyst' ? roleLabels[role] : '') || '';
 
         const finalParsedCv: ParsedCv = {
           fullName: data.fullName || user?.fullName || extractNameFromFilename(nextFile.name) || '',
-          currentTitle: data.currentTitle || resolvedTitle,
+          currentTitle: data.currentTitle || resolvedTitle || 'Professional',
           email: data.email || user?.email || '',
           phone: data.phone || '',
           // Only use location extracted from CV — no hardcoded Cairo fallback
@@ -192,10 +349,11 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
           linkedin: data.linkedin || '',
           github: data.github || '',
           portfolio: data.portfolio || '',
+          socialLinks: Array.isArray(data.socialLinks) ? data.socialLinks : [],
           links: Array.isArray(data.links) ? data.links : [],
           summary: data.summary || '',
           filename: nextFile.name,
-          targetRole: data.targetRole || resolvedTitle,
+          targetRole: resolvedTitle || data.currentTitle || 'Professional',
           experienceYears: data.experienceYears || 0,
           experiences: data.experiences || [],
           experience: {
@@ -219,8 +377,17 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
           detectedSkills,
           categorizedSkills: data.categorizedSkills,
           categorizedSkillGroups: data.categorizedSkillGroups,
-          projects: data.projects || [],
+          projects: Array.isArray(data.projects) ? data.projects.map((p: any, idx: number) => ({
+            id: p.id || `prj-${idx + 1}`,
+            title: p.title || `Project ${idx + 1}`,
+            description: p.description || '',
+            technologies: Array.isArray(p.technologies) ? p.technologies : [],
+            bullets: Array.isArray(p.bullets) ? p.bullets : [],
+            github: p.github || '',
+            link: p.link || ''
+          })) : [],
           atsReport: data.atsReport,
+          certificates: data.certificates || [],
           actionPlan: data.actionPlan
         };
 
@@ -228,6 +395,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         await new Promise((r) => setTimeout(r, 300));
         setProgress(100);
         setStatus('complete');
+        setChecksRevealed(4);
         setStageMessage('Parsing and market alignment complete!');
         setParsedCv(finalParsedCv);
         setSkillsAdded(detectedSkills.length);
@@ -238,11 +406,49 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
           updateFullName(data.fullName.trim());
         }
 
+        // Sync detected target role to AuthContext + Supabase (canonical source of truth)
+        const detectedRole = finalParsedCv.targetRole || finalParsedCv.currentTitle;
+        if (detectedRole && detectedRole.trim()) {
+          updateTargetRole(detectedRole.trim());
+          // Also sync 3watly_role for SkillPlanContext
+          localStorage.setItem(`3watly_role_${user?.id}`, detectedRole.trim().toLowerCase().replace(/\s+/g, '-'));
+        }
+
+        // If candidate experiences are all internships, align experience level to 'Fresh Graduate'
+        if (data.isAllInternships || (Array.isArray(data.experiences) && data.experiences.length > 0 && data.experiences.every((e: any) => e.type === 'internship'))) {
+          setExperienceState('Fresh Graduate');
+          updateExperience('Fresh Graduate');
+          try {
+            localStorage.setItem(`3watly_experience_${user?.id}`, 'Fresh Graduate');
+          } catch {}
+        }
+
         // Save to localStorage
         try {
-          localStorage.setItem('3watly_parsed_cv', JSON.stringify(finalParsedCv));
+          localStorage.setItem(`3watly_parsed_cv_${user?.id}`, JSON.stringify(finalParsedCv));
         } catch (storageErr) {
           console.warn('Storage error:', storageErr);
+        }
+
+        // Synchronize with CV Builder context and versions
+        syncParsedCvToCVBuilder(finalParsedCv, user?.fullName);
+
+        // Sync to Supabase cloud
+        if (user?.id) {
+          try {
+            fetch('/api/cv/document', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: user.id,
+                filename: file?.name || 'Curriculum Vitae',
+                targetRole: finalParsedCv.targetRole || role,
+                parsedCv: finalParsedCv,
+                rawText: (finalParsedCv as any).rawText || '',
+                atsScore: (finalParsedCv as any).atsScore || 85,
+              }),
+            }).catch(() => null);
+          } catch {}
         }
 
         const isArabic = typeof window !== 'undefined' && localStorage.getItem('3watly_lang') === 'ar';
@@ -266,6 +472,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       setHasNoCv(true);
       setCareerStage(data.careerStage);
       setExperience(data.experience);
+      updateExperience(data.experience);
       setQuickSkills(data.skills);
       setCareerGoal(data.goal);
 
@@ -274,6 +481,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       }
 
       const roleTitle = role ? role.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Career Specialist';
+      if (roleTitle) updateTargetRole(roleTitle);
       const resolvedName = data.fullName || user?.fullName || 'Professional';
 
       const detectedSkills: { key: TechKey; name: string }[] = data.skills.map((s) => ({
@@ -306,30 +514,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         },
         skills: data.skills,
         detectedSkills,
-        atsReport: {
-          score: 88,
-          structureScore: 90,
-          readabilityScore: 88,
-          impactScore: 85,
-          skillsScore: 90,
-          hasEmail: true,
-          hasPhone: true,
-          hasLocation: true,
-          hasSummary: true,
-          hasExperience: true,
-          hasEducation: true,
-          hasSkills: true,
-          hasMetrics: true,
-          actionVerbsCount: 14,
-          metricsCount: 6,
-          strengths: [
-            `Strong foundational alignment for ${roleTitle}`,
-            `Verified in-demand skills: ${data.skills.slice(0, 3).join(', ')}`
-          ],
-          improvements: [
-            'Create a downloadable CV using 3WATLY CV Builder to apply to direct openings.'
-          ]
-        },
+        atsReport: undefined,
         actionPlan: [
           {
             title: `Advanced ${data.skills[0] || 'Technical'} Mastery`,
@@ -349,10 +534,11 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       setParsedCv(constructedCv);
       setStatus('complete');
       setProgress(100);
-      setChecksRevealed(3);
+      setChecksRevealed(4);
       try {
-        localStorage.setItem('3watly_parsed_cv', JSON.stringify(constructedCv));
+        localStorage.setItem(`3watly_parsed_cv_${user?.id}`, JSON.stringify(constructedCv));
       } catch {}
+      syncParsedCvToCVBuilder(constructedCv, resolvedName);
     },
     [role, user, updateFullName]
   );
@@ -363,39 +549,33 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       return role && roleProfiles[role] ? roleProfiles[role] : null;
     }
 
-    const atsScore = parsedCv.atsReport?.score ?? 84;
-    const expYears = parsedCv.experienceYears ?? 2;
+    const atsScore = parsedCv.atsReport?.score ?? null;
+    const expYears = parsedCv.experienceYears ?? 0;
     const skillsList = parsedCv.skills ?? [];
 
     const topSkills = parsedCv.detectedSkills && parsedCv.detectedSkills.length > 0
       ? parsedCv.detectedSkills.slice(0, 6)
-      : [
-          { key: 'sql' as TechKey, name: 'SQL' },
-          { key: 'python' as TechKey, name: 'Python' },
-          { key: 'excel' as TechKey, name: 'Excel' }
-        ];
+      : skillsList.slice(0, 6).map(s => ({ key: s.toLowerCase().replace(/[^a-z0-9]/g, '') as TechKey, name: s }));
 
     const fallbackGaps = role && roleProfiles[role]?.skillGaps ? roleProfiles[role].skillGaps : [];
 
     return {
-      headline: `${parsedCv.fullName} • ${parsedCv.currentTitle}`,
+      headline: `${parsedCv.fullName}${parsedCv.currentTitle ? ` • ${parsedCv.currentTitle}` : ''}`,
       scores: {
-        overall: atsScore,
-        skills: Math.min(100, Math.max(50, skillsList.length * 8)),
-        experience: Math.min(100, Math.max(60, expYears * 25)),
-        education: 90
+        overall: atsScore ?? (skillsList.length > 0 ? Math.min(80, skillsList.length * 10) : 0),
+        skills: Math.min(100, skillsList.length * 10),
+        experience: Math.min(100, expYears * 25),
+        education: parsedCv.educationHistory && parsedCv.educationHistory.length > 0 ? 80 : 0
       },
       experienceYears: expYears,
-      relevance: { relevant: 75, related: 20, other: 5 },
-      strengths: parsedCv.atsReport?.strengths?.length ? parsedCv.atsReport.strengths : ['Strong technical stack match'],
+      relevance: { relevant: skillsList.length > 0 ? 70 : 0, related: 20, other: 10 },
+      strengths: parsedCv.atsReport?.strengths?.length ? parsedCv.atsReport.strengths : (skillsList.length > 0 ? [`Relevant skills: ${skillsList.slice(0, 3).join(', ')}`] : []),
       topSkills,
       extraSkillCount: Math.max(0, skillsList.length - 6),
       skillGaps: fallbackGaps,
-      targetRoles: [
-        { title: parsedCv.currentTitle, match: atsScore, label: 'Strong Match' },
-        { title: 'Data Engineer', match: Math.max(60, atsScore - 12), label: 'Good Match' },
-        { title: 'BI Specialist', match: Math.max(55, atsScore - 18), label: 'Possible Match' }
-      ],
+      targetRoles: parsedCv.currentTitle ? [
+        { title: parsedCv.currentTitle, match: atsScore ?? 70, label: (atsScore && atsScore >= 80) ? 'Strong Match' : 'Good Match' }
+      ] : [],
       actions: parsedCv.actionPlan?.map((ap) => ({
         key: 'course' as const,
         title: ap.title,

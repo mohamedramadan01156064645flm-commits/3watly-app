@@ -12,6 +12,7 @@ import { DEFAULT_ROLE_ID, SKILLS } from '../data/skillCatalog';
 import type { SkillPlan, SkillStatus, SortMode } from '../types/skills';
 import { computePlan, getRole } from '../utils/skillPlan';
 import { useCV } from './CVContext';
+import { useAuth } from './AuthContext';
 
 interface SkillPlanContextValue {
   plan: SkillPlan;
@@ -35,8 +36,24 @@ const SkillPlanContext = createContext<SkillPlanContextValue | null>(null);
 export function SkillPlanProvider({
   children
 }: { children: React.ReactNode }) {
+  const { user, updateTargetRole } = useAuth();
   const { cv, update } = useCV();
-  const [roleId, setRoleIdState] = useState(DEFAULT_ROLE_ID);
+  const [roleId, setRoleIdState] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('3watly_role');
+        if (saved) return saved;
+      } catch {}
+    }
+    return DEFAULT_ROLE_ID;
+  });
+
+  // Keep in sync with user profile targetRole
+  React.useEffect(() => {
+    if (user?.targetRole && user.targetRole !== roleId) {
+      setRoleIdState(user.targetRole);
+    }
+  }, [user?.targetRole]);
   const [statuses, setStatuses] = useState<Record<string, SkillStatus>>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -195,9 +212,19 @@ export function SkillPlanProvider({
   const setRoleId = useCallback(
     (nextRoleId: string) => {
       setRoleIdState(nextRoleId);
-      toast.success(`Target role set to ${getRole(nextRoleId).name}.`);
+      try {
+        localStorage.setItem('3watly_role', nextRoleId);
+        if (user?.id) {
+          localStorage.setItem(`3watly_role_${user.id}`, nextRoleId);
+        }
+      } catch {}
+      if (updateTargetRole) {
+        updateTargetRole(nextRoleId);
+      }
+      const roleDef = getRole(nextRoleId);
+      toast.success(roleDef.nameAr ? `تم تعيين المسار المستهدف: ${roleDef.nameAr}` : `Target role set to ${roleDef.name}.`);
     },
-    []
+    [user?.id, updateTargetRole]
   );
 
   const readinessFor = useCallback(

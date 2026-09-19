@@ -110,7 +110,14 @@ export default function MarketPage() {
       }))
     : computedTopSkills;
 
-  const ranking = getSkillRanking(filters);
+  const ranking = liveStats?.topSkills?.length > 0
+    ? liveStats.topSkills.map((s: any) => ({
+        name: s.name,
+        value: s.percentage || s.count,
+        icon: '📊',
+        color: '#3B82F6',
+      }))
+    : getSkillRanking(filters);
 
   const setFilter = (key: keyof Filters) => (value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -130,6 +137,10 @@ export default function MarketPage() {
   };
 
   const handleStatSelect = (id: string) => {
+    if (id === 'jobs') {
+      router.push('/jobs');
+      return;
+    }
     if (id === 'skill') {
       setSelectedSkill(ranking[0]?.name || 'SQL');
       toast.info(
@@ -139,7 +150,6 @@ export default function MarketPage() {
       );
       return;
     }
-    router.push(statTargets[id] || '/jobs');
   };
 
   const getPlan = () => {
@@ -173,8 +183,8 @@ export default function MarketPage() {
               icon={Briefcase}
               options={industries.map((i) => ({
                 id: i.id,
-                label: i.label,
-                description: i.description
+                label: isAr ? i.labelAr : i.label,
+                description: isAr ? i.descriptionAr : i.description
               }))}
               value={filters.industry}
               onChange={setFilter('industry')}
@@ -187,8 +197,8 @@ export default function MarketPage() {
               icon={MapPin}
               options={regions.map((r) => ({
                 id: r.id,
-                label: r.label,
-                description: r.description
+                label: isAr ? r.labelAr : r.label,
+                description: isAr ? r.descriptionAr : r.description
               }))}
               value={filters.region}
               onChange={setFilter('region')}
@@ -201,8 +211,8 @@ export default function MarketPage() {
               icon={Calendar}
               options={timeframes.map((t) => ({
                 id: t.id,
-                label: t.label,
-                description: t.description
+                label: isAr ? t.labelAr : t.label,
+                description: isAr ? t.descriptionAr : t.description
               }))}
               value={filters.timeframe}
               onChange={setFilter('timeframe')}

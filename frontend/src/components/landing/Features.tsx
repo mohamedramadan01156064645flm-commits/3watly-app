@@ -20,9 +20,9 @@ const tones: Record<string, { tile: string; bullet: string; link: string }> = {
     link: 'text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300'
   },
   primary: {
-    tile: 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-500/30',
-    bullet: 'text-blue-600 dark:text-blue-400',
-    link: 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300'
+    tile: 'bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 border border-cyan-100 dark:border-cyan-500/30',
+    bullet: 'text-cyan-500 dark:text-cyan-400',
+    link: 'text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300'
   },
   accent: {
     tile: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/30',
@@ -107,13 +107,31 @@ export function Features() {
       ];
 
   return (
-    <section id="features" className="w-full bg-transparent py-14 px-6 sm:px-10 lg:px-16 transition-colors duration-300 scroll-mt-20">
-      <div className="max-w-[1400px] mx-auto">
+    <section id="features" className="relative w-full bg-white dark:bg-[#040816] py-16 px-6 sm:px-10 lg:px-16 transition-colors duration-300 scroll-mt-20 overflow-hidden">
+      {/* Seamless Ambient Glow — GPU-composited, no rasterization on scroll */}
+      <div
+        className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[1000px] h-[300px] dark:block hidden"
+        style={{
+          background: 'radial-gradient(ellipse 60% 100% at 50% 0%, rgba(0,102,255,0.12) 0%, rgba(0,210,255,0.05) 55%, transparent 100%)',
+          contain: 'paint',
+          transform: 'translateX(-50%) translateZ(0)',
+        }}
+      />
+      <div
+        className="pointer-events-none absolute top-12 right-12 w-[400px] h-[400px] dark:block hidden"
+        style={{
+          background: 'radial-gradient(circle at 70% 40%, rgba(99,102,241,0.06) 0%, transparent 70%)',
+          contain: 'paint',
+          transform: 'translateZ(0)',
+        }}
+      />
+
+      <div className="max-w-[1400px] mx-auto relative z-10">
         
         {/* Section Heading */}
         <div className="text-center max-w-3xl mx-auto space-y-3">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-300 text-[12px] font-bold tracking-wider uppercase border border-blue-100/80 dark:border-blue-500/30">
-            <Sparkles className="w-3.5 h-3.5" />
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg ltr:bg-gradient-to-r rtl:bg-gradient-to-l from-blue-600/10 to-transparent ltr:border-l-[3px] rtl:border-r-[3px] border-blue-600 dark:border-blue-400 text-blue-700 dark:text-blue-300 text-[12px] font-bold tracking-wide">
+            <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
             <span>{isAr ? "أقوى المميزات" : "Powerful Features"}</span>
           </div>
 
@@ -156,7 +174,7 @@ export function Features() {
             return (
               <div
                 key={card.title}
-                className="flex flex-col rounded-[28px] border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0B1120] p-6 shadow-xl shadow-slate-200/50 dark:shadow-[0_15px_35px_-10px_rgba(0,0,0,0.7),0_0_15px_rgba(99,102,241,0.06)] hover:shadow-2xl transition-all duration-300"
+                className="flex flex-col rounded-[28px] border border-slate-200/80 dark:border-white/[0.08] dark:hover:border-cyan-500/30 bg-white dark:bg-[#060D1E] p-6 shadow-xl shadow-slate-200/50 dark:shadow-[0_15px_35px_-10px_rgba(0,0,0,0.8),0_0_20px_rgba(0,210,255,0.04)] hover:shadow-2xl transition-all duration-300"
               >
                 {/* Header */}
                 <div className="flex items-start gap-3.5">

@@ -1,0 +1,342 @@
+import React from 'react';
+import {
+  Code2,
+  Brain,
+  Users,
+  Layout,
+  Server,
+  Layers,
+  Sparkles,
+  Smartphone,
+  Shield,
+  Palette,
+  Briefcase,
+  TrendingUp,
+  MapPin,
+  Calendar,
+  Database,
+  BarChart3,
+  FileBarChart,
+  LayoutDashboard,
+  Cpu,
+  Cloud,
+  Settings,
+  Sigma,
+  Network,
+  LineChart,
+  Globe,
+  Terminal,
+  Zap,
+} from 'lucide-react';
+
+export interface RoleTheme {
+  iconFrom: string;
+  iconTo: string;
+  bloom: string;
+  surfaceTop: string;
+  surfaceBottom: string;
+  borderIdle: string;
+  borderActive: string;
+  glow: string;
+  accent: string;
+  lightSurfaceTop: string;
+  lightSurfaceBottom: string;
+  lightBorder: string;
+}
+
+export interface RoleSkillItem {
+  label: string;
+  icon: React.ElementType;
+}
+
+export interface RoleItem {
+  id: string;
+  title: string;
+  titleEn: string;
+  subtitle?: string;
+  description: string;
+  location: string;
+  jobs: string;
+  jobsCount: number;
+  growth: string;
+  salary: string;
+  hot?: boolean;
+  icon: React.ElementType;
+  skills: RoleSkillItem[];
+  theme: RoleTheme;
+}
+
+export const TARGET_ROLES: RoleItem[] = [
+  {
+    id: 'data-engineer',
+    title: 'مهندس البيانات',
+    titleEn: 'Data Engineer',
+    subtitle: '(Data Engineer)',
+    description: 'بناء وتشغيل خطوط معالجة وتدفق البيانات الضخمة التي تعتمد عليها فرق التحليل والذكاء الاصطناعي.',
+    location: 'القاهرة / عن بعد',
+    jobs: '1,247',
+    jobsCount: 1247,
+    growth: '+24%',
+    salary: '35,000 – 60,000 ج.م / شهر',
+    hot: false,
+    icon: Brain,
+    skills: [
+      { label: 'بايثون و SQL', icon: Code2 },
+      { label: 'أنابيب معالجة ETL', icon: Cloud },
+      { label: 'حاويات دوكر و Airflow', icon: Settings },
+      { label: 'قواعد البيانات الكبيرة', icon: Database },
+    ],
+    theme: {
+      iconFrom: '#38BDF8',
+      iconTo: '#0284C7',
+      bloom: 'rgba(56, 189, 248, 0.40)',
+      surfaceTop: '#0B457B',
+      surfaceBottom: '#010A18',
+      borderIdle: '#2A639E',
+      borderActive: '#38BDF8',
+      glow: 'rgba(56, 189, 248, 0.50)',
+      accent: '#38BDF8',
+      lightSurfaceTop: '#E0F2FE',
+      lightSurfaceBottom: '#FFFFFF',
+      lightBorder: '#BAE6FD',
+    },
+  },
+  {
+    id: 'fullstack-developer',
+    title: 'مطور برمجيات شامل',
+    titleEn: 'Full Stack Developer',
+    subtitle: '(Full Stack Developer)',
+    description: 'بناء تطبيقات ويب متكاملة وسريعة من الصفر بداية من واجهات React حتى خوادم Node.js وقواعد البيانات.',
+    location: 'القاهرة / عن بعد',
+    jobs: '1,950',
+    jobsCount: 1950,
+    growth: '+27%',
+    salary: '26,000 – 48,000 ج.م / شهر',
+    hot: true,
+    icon: Layers,
+    skills: [
+      { label: 'React.js & Next.js', icon: Layout },
+      { label: 'Node.js & Express', icon: Server },
+      { label: 'TypeScript & SQL', icon: Code2 },
+      { label: 'نشر السحابة و Docker', icon: Cloud },
+    ],
+    theme: {
+      iconFrom: '#818CF8',
+      iconTo: '#4F46E5',
+      bloom: 'rgba(99, 102, 241, 0.40)',
+      surfaceTop: '#1E1B4B',
+      surfaceBottom: '#050414',
+      borderIdle: '#4338CA',
+      borderActive: '#818CF8',
+      glow: 'rgba(99, 102, 241, 0.50)',
+      accent: '#818CF8',
+      lightSurfaceTop: '#EEF2FF',
+      lightSurfaceBottom: '#FFFFFF',
+      lightBorder: '#C7D2FE',
+    },
+  },
+  {
+    id: 'frontend-developer',
+    title: 'مطور واجهات أمامية',
+    titleEn: 'Frontend Developer',
+    subtitle: '(Frontend Developer)',
+    description: 'تصميم وبناء واجهات مستخدم تفاعلية وعالية الاستجابة باستخدام React و Next.js و Tailwind CSS.',
+    location: 'القاهرة / الإسكندرية',
+    jobs: '1,840',
+    jobsCount: 1840,
+    growth: '+22%',
+    salary: '18,000 – 38,000 ج.م / شهر',
+    hot: false,
+    icon: Layout,
+    skills: [
+      { label: 'React.js & Next.js', icon: Layout },
+      { label: 'TypeScript & JavaScript', icon: Code2 },
+      { label: 'Tailwind CSS & UI/UX', icon: Palette },
+      { label: 'تحسين الأداء و SEO', icon: Zap },
+    ],
+    theme: {
+      iconFrom: '#2DD4BF',
+      iconTo: '#0D9488',
+      bloom: 'rgba(45, 212, 191, 0.40)',
+      surfaceTop: '#134E4A',
+      surfaceBottom: '#021C1A',
+      borderIdle: '#115E59',
+      borderActive: '#2DD4BF',
+      glow: 'rgba(45, 212, 191, 0.50)',
+      accent: '#2DD4BF',
+      lightSurfaceTop: '#CCFBF1',
+      lightSurfaceBottom: '#FFFFFF',
+      lightBorder: '#99F6E4',
+    },
+  },
+  {
+    id: 'backend-developer',
+    title: 'مطور خوادم وواجهات خلفية',
+    titleEn: 'Backend Developer',
+    subtitle: '(Backend Developer)',
+    description: 'تصميم وبناء خوادم الويب وقواعد البيانات وواجهات البرمجة RESTful APIs و Microservices الآمنة.',
+    location: 'القاهرة / الجيزة',
+    jobs: '1,520',
+    jobsCount: 1520,
+    growth: '+25%',
+    salary: '25,000 – 50,000 ج.م / شهر',
+    hot: false,
+    icon: Server,
+    skills: [
+      { label: 'Node.js & Python', icon: Terminal },
+      { label: 'PostgreSQL & MongoDB', icon: Database },
+      { label: 'REST APIs & GraphQL', icon: Globe },
+      { label: 'Docker & Caching Redis', icon: Cpu },
+    ],
+    theme: {
+      iconFrom: '#F59E0B',
+      iconTo: '#D97706',
+      bloom: 'rgba(245, 158, 11, 0.38)',
+      surfaceTop: '#451A03',
+      surfaceBottom: '#0D0500',
+      borderIdle: '#78350F',
+      borderActive: '#FBBF24',
+      glow: 'rgba(245, 158, 11, 0.45)',
+      accent: '#FBBF24',
+      lightSurfaceTop: '#FEF3C7',
+      lightSurfaceBottom: '#FFFFFF',
+      lightBorder: '#FDE68A',
+    },
+  },
+  {
+    id: 'ai-ml-engineer',
+    title: 'مهندس ذكاء اصطناعي وتعلم آلة',
+    titleEn: 'AI & ML Engineer',
+    subtitle: '(AI & ML Engineer)',
+    description: 'تطوير وتدريب نماذج تعلم الآلة والتعلم العميق وبناء تطبيقات الذكاء الاصطناعي التوليدي و LLMs.',
+    location: 'القاهرة / عن بعد',
+    jobs: '820',
+    jobsCount: 820,
+    growth: '+45%',
+    salary: '35,000 – 65,000 ج.م / شهر',
+    hot: false,
+    icon: Sparkles,
+    skills: [
+      { label: 'بايثون و Scikit-Learn', icon: Code2 },
+      { label: 'التعلم العميق PyTorch', icon: Brain },
+      { label: 'الذكاء التوليدي و LLMs', icon: Sparkles },
+      { label: 'نشر النماذج و FastAPI', icon: Server },
+    ],
+    theme: {
+      iconFrom: '#C084FC',
+      iconTo: '#9333EA',
+      bloom: 'rgba(192, 132, 252, 0.40)',
+      surfaceTop: '#3B0764',
+      surfaceBottom: '#0B0114',
+      borderIdle: '#6B21A8',
+      borderActive: '#C084FC',
+      glow: 'rgba(192, 132, 252, 0.50)',
+      accent: '#C084FC',
+      lightSurfaceTop: '#F3E8FF',
+      lightSurfaceBottom: '#FFFFFF',
+      lightBorder: '#E9D5FF',
+    },
+  },
+  {
+    id: 'bi-developer',
+    title: 'مطور ذكاء الأعمال',
+    titleEn: 'BI Developer',
+    subtitle: '(BI Developer)',
+    description: 'تطوير لوحات التحكم والتقارير التفاعلية (Power BI) التي تتخذ الشركات قراراتها الاستراتيجية بناءً عليها.',
+    location: 'القاهرة / الجيزة',
+    jobs: '934',
+    jobsCount: 934,
+    growth: '+18%',
+    salary: '20,000 – 42,000 ج.م / شهر',
+    hot: false,
+    icon: BarChart3,
+    skills: [
+      { label: 'Power BI & DAX', icon: LayoutDashboard },
+      { label: 'قواعد بيانات SQL', icon: Database },
+      { label: 'تصميم التقارير والتابلوه', icon: FileBarChart },
+      { label: 'نمذجة البيانات التحليلية', icon: BarChart3 },
+    ],
+    theme: {
+      iconFrom: '#A855F7',
+      iconTo: '#6B21A8',
+      bloom: 'rgba(168, 85, 247, 0.35)',
+      surfaceTop: '#271552',
+      surfaceBottom: '#08050F',
+      borderIdle: '#4A3480',
+      borderActive: '#A855F7',
+      glow: 'rgba(168, 85, 247, 0.40)',
+      accent: '#C084FC',
+      lightSurfaceTop: '#FAF5FF',
+      lightSurfaceBottom: '#FFFFFF',
+      lightBorder: '#E9D5FF',
+    },
+  },
+  {
+    id: 'senior-data-analyst',
+    title: 'محلل بيانات أول',
+    titleEn: 'Senior Data Analyst',
+    subtitle: '(Senior Data Analyst)',
+    description: 'قيادة التحليلات الإحصائية والتجارية المتقدمة واستخراج الأنماط لتوجيه مسار المنتجات والنمو المالي.',
+    location: 'القاهرة / الإسكندرية',
+    jobs: '1,610',
+    jobsCount: 1610,
+    growth: '+15%',
+    salary: '28,000 – 55,000 ج.م / شهر',
+    hot: false,
+    icon: Users,
+    skills: [
+      { label: 'الإحصاء و A/B Testing', icon: Sigma },
+      { label: 'تحليل الأعمال بـ Python', icon: TrendingUp },
+      { label: 'نمذجة البيانات و SQL', icon: Network },
+      { label: 'التنبؤ المالي و Power BI', icon: LineChart },
+    ],
+    theme: {
+      iconFrom: '#FB7185',
+      iconTo: '#E11D48',
+      bloom: 'rgba(251, 113, 133, 0.38)',
+      surfaceTop: '#4C0519',
+      surfaceBottom: '#100105',
+      borderIdle: '#881337',
+      borderActive: '#FB7185',
+      glow: 'rgba(251, 113, 133, 0.45)',
+      accent: '#FDA4AF',
+      lightSurfaceTop: '#FFE4E6',
+      lightSurfaceBottom: '#FFFFFF',
+      lightBorder: '#FECDD3',
+    },
+  },
+  {
+    id: 'flutter-developer',
+    title: 'مطور تطبيقات موبايل',
+    titleEn: 'Flutter Developer',
+    subtitle: '(Flutter Developer)',
+    description: 'تطوير تطبيقات هواتف ذكية لنظامي Android و iOS بكود برمجي موحد وعالي الأداء باستخدام Flutter.',
+    location: 'القاهرة / عن بعد',
+    jobs: '910',
+    jobsCount: 910,
+    growth: '+20%',
+    salary: '18,000 – 40,000 ج.م / شهر',
+    hot: false,
+    icon: Smartphone,
+    skills: [
+      { label: 'Flutter & Dart', icon: Smartphone },
+      { label: 'State Management (Bloc/Riverpod)', icon: Cpu },
+      { label: 'ربط واجهات REST & Firebase', icon: Globe },
+      { label: 'تصميم واجهات الموبايل الحديثة', icon: Palette },
+    ],
+    theme: {
+      iconFrom: '#38BDF8',
+      iconTo: '#0284C7',
+      bloom: 'rgba(56, 189, 248, 0.35)',
+      surfaceTop: '#082F49',
+      surfaceBottom: '#020617',
+      borderIdle: '#0369A1',
+      borderActive: '#38BDF8',
+      glow: 'rgba(56, 189, 248, 0.45)',
+      accent: '#38BDF8',
+      lightSurfaceTop: '#F0F9FF',
+      lightSurfaceBottom: '#FFFFFF',
+      lightBorder: '#BAE6FD',
+    },
+  },
+];

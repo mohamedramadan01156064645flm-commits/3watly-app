@@ -1,13 +1,16 @@
 "use client";
 
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import ReactDOM from 'react-dom';
 import { 
   Plus, 
   Trash2, 
   ChevronUp, 
-  ChevronDown, 
+  ChevronDown,
+  ChevronDown as ChevronDownIcon,
   Globe, 
-  Link as LinkIcon 
+  Link as LinkIcon,
+  Check
 } from 'lucide-react';
 import { 
   FaLinkedin, 
@@ -22,18 +25,171 @@ import { useLanguage } from '../../../contexts/LanguageContext';
 import { TextField } from '../../ui/Field';
 import type { Contact, SocialLink, SocialPlatform } from '../../../types/cv';
 
-const PLATFORMS: Array<{ id: SocialPlatform; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-  { id: 'LinkedIn', label: 'LinkedIn', icon: FaLinkedin },
-  { id: 'GitHub', label: 'GitHub', icon: FaGithub },
-  { id: 'Twitter', label: 'Twitter / X', icon: FaXTwitter },
-  { id: 'Portfolio', label: 'Portfolio', icon: Globe },
-  { id: 'Dribbble', label: 'Dribbble', icon: FaDribbble },
-  { id: 'Medium', label: 'Medium', icon: FaMedium },
-  { id: 'Dev.to', label: 'Dev.to', icon: FaDev },
-  { id: 'Personal', label: 'Personal Website', icon: Globe },
-  { id: 'Other', label: 'Other', icon: LinkIcon }
+// ─── Platform definitions with colors ─────────────────────────────────────────
+const PLATFORMS: Array<{
+  id: SocialPlatform;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;       // text color for icon
+  bg: string;          // background pill color
+  border: string;      // border color
+}> = [
+  { id: 'LinkedIn',  label: 'LinkedIn',        icon: FaLinkedin, color: 'text-[#0A66C2]',  bg: 'bg-blue-50 dark:bg-blue-950/50',    border: 'border-blue-200 dark:border-blue-700/50' },
+  { id: 'GitHub',    label: 'GitHub',           icon: FaGithub,   color: 'text-slate-800 dark:text-white', bg: 'bg-slate-100 dark:bg-slate-800/60', border: 'border-slate-300 dark:border-slate-600/50' },
+  { id: 'Twitter',   label: 'Twitter / X',      icon: FaXTwitter, color: 'text-slate-900 dark:text-slate-100', bg: 'bg-slate-100 dark:bg-slate-800/60', border: 'border-slate-300 dark:border-slate-600/50' },
+  { id: 'Portfolio', label: 'Portfolio',        icon: Globe,      color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950/50', border: 'border-indigo-200 dark:border-indigo-700/50' },
+  { id: 'Dribbble',  label: 'Dribbble',         icon: FaDribbble, color: 'text-pink-500',  bg: 'bg-pink-50 dark:bg-pink-950/50',    border: 'border-pink-200 dark:border-pink-700/50' },
+  { id: 'Medium',    label: 'Medium',           icon: FaMedium,   color: 'text-slate-900 dark:text-slate-100', bg: 'bg-slate-100 dark:bg-slate-800/60', border: 'border-slate-300 dark:border-slate-600/50' },
+  { id: 'Dev.to',    label: 'Dev.to',           icon: FaDev,      color: 'text-slate-900 dark:text-slate-100', bg: 'bg-slate-100 dark:bg-slate-800/60', border: 'border-slate-300 dark:border-slate-600/50' },
+  { id: 'Personal',  label: 'Personal Website', icon: Globe,      color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-50 dark:bg-violet-950/50', border: 'border-violet-200 dark:border-violet-700/50' },
+  { id: 'Other',     label: 'Other',            icon: LinkIcon,   color: 'text-slate-500', bg: 'bg-slate-100 dark:bg-slate-800/60', border: 'border-slate-300 dark:border-slate-600/50' },
 ];
 
+// ─── Portal dropdown for platform selection ────────────────────────────────────
+interface PlatformDropdownProps {
+  value: SocialPlatform;
+  onChange: (val: SocialPlatform) => void;
+  isAr?: boolean;
+}
+
+function PlatformDropdown({ value, onChange, isAr = false }: PlatformDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+  const current = PLATFORMS.find((p) => p.id === value) || PLATFORMS[0];
+  const IconComp = current.icon;
+
+  const openDropdown = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const dropWidth = Math.max(rect.width, 230);
+    // Check if dropdown fits below trigger or needs to open above
+    const fitsBelow = rect.bottom + 270 <= window.innerHeight;
+    const top = fitsBelow ? rect.bottom + 6 : Math.max(10, rect.top - 276);
+
+    // Compute left coordinate with RTL awareness and screen edge clamping
+    const rawLeft = isAr ? rect.right - dropWidth : rect.left;
+    const left = Math.max(10, Math.min(window.innerWidth - dropWidth - 10, rawLeft));
+
+    setDropPos({
+      top,
+      left,
+      width: dropWidth,
+    });
+    setOpen(true);
+  }, [isAr]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (
+        dropRef.current?.contains(e.target as Node) ||
+        triggerRef.current?.contains(e.target as Node)
+      ) return;
+      setOpen(false);
+    };
+
+    // Close on external scroll, but NOT when scrolling inside the dropdown list
+    const handleScroll = (e: Event) => {
+      if (dropRef.current?.contains(e.target as Node)) {
+        return;
+      }
+      setOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleClick);
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [open]);
+
+  const dropdownEl = open && dropPos ? ReactDOM.createPortal(
+    <div
+      ref={dropRef}
+      data-dropdown="platform"
+      style={{
+        position: 'fixed',
+        top: dropPos.top,
+        left: dropPos.left,
+        width: dropPos.width,
+        zIndex: 99999,
+      }}
+      className="rounded-2xl border border-white/10 bg-[#0B1120] shadow-2xl shadow-black/60 overflow-hidden backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150"
+    >
+      {/* Header */}
+      <div className="px-3 pt-2.5 pb-1.5 border-b border-white/[0.08] flex items-center justify-between">
+        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+          {isAr ? "اختر المنصة" : "Select Platform"}
+        </p>
+        <span className="text-[10px] text-blue-400 font-semibold">
+          {PLATFORMS.length} {isAr ? "منصات" : "options"}
+        </span>
+      </div>
+      {/* Options list */}
+      <div className="py-1 max-h-60 overflow-y-auto overscroll-contain">
+        {PLATFORMS.map((p) => {
+          const Icon = p.icon;
+          const isSelected = p.id === value;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(p.id);
+                setOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-left rtl:text-right transition-colors cursor-pointer group ${
+                isSelected
+                  ? 'bg-blue-600/15 text-white'
+                  : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
+              }`}
+            >
+              {/* Colored icon pill */}
+              <span className={`flex items-center justify-center w-7 h-7 rounded-xl shrink-0 ${p.bg} ${p.border} border shadow-xs transition-transform group-hover:scale-105`}>
+                <Icon className={`w-3.5 h-3.5 ${p.color}`} />
+              </span>
+              <span className="text-[13px] font-semibold flex-1 truncate">{p.label}</span>
+              {isSelected && <Check className="w-4 h-4 text-blue-400 shrink-0" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => (open ? setOpen(false) : openDropdown())}
+        className={`relative w-full h-9 flex items-center gap-2 pl-2.5 pr-7 rounded-xl border text-[12.5px] font-semibold transition-all cursor-pointer select-none ${
+          open
+            ? 'border-blue-500 bg-[#040816] text-white shadow-xs shadow-blue-500/20'
+            : 'border-slate-200/90 dark:border-white/10 bg-slate-50/80 dark:bg-[#040816] text-slate-800 dark:text-slate-200 hover:border-slate-400 dark:hover:border-white/20'
+        }`}
+      >
+        {/* Current icon pill */}
+        <span className={`flex items-center justify-center w-6 h-6 rounded-lg shrink-0 ${current.bg} ${current.border} border`}>
+          <IconComp className={`w-3 h-3 ${current.color}`} />
+        </span>
+        <span className="flex-1 truncate text-left rtl:text-right">{current.label}</span>
+        <ChevronDownIcon
+          className={`w-3.5 h-3.5 text-slate-400 absolute ltr:right-2.5 rtl:left-2.5 top-1/2 -translate-y-1/2 pointer-events-none transition-transform duration-150 ${open ? 'rotate-180 text-blue-400' : ''}`}
+        />
+      </button>
+      {dropdownEl}
+    </>
+  );
+}
+
+// ─── Main ContactSection ───────────────────────────────────────────────────────
 export function ContactSection() {
   const { cv, update } = useCV();
   const { isAr } = useLanguage();
@@ -46,20 +202,21 @@ export function ContactSection() {
 
   // Initialize socialLinks from existing linkedin/github/portfolio if not already present
   const links: SocialLink[] = React.useMemo(() => {
-    if (Array.isArray(cv.contact.socialLinks) && cv.contact.socialLinks.length > 0) {
-      return cv.contact.socialLinks;
+    const isPlaceholder = (u?: string) => !u || u.toLowerCase().includes('your-profile');
+    const existing = (Array.isArray(cv.contact.socialLinks) ? cv.contact.socialLinks : [])
+      .filter((l) => !isPlaceholder(l.url));
+
+    const result: SocialLink[] = [...existing];
+    if (cv.contact.linkedin && !isPlaceholder(cv.contact.linkedin) && !result.some((l) => l.platform === 'LinkedIn')) {
+      result.unshift({ id: 'link-li', platform: 'LinkedIn', url: cv.contact.linkedin });
     }
-    const defaults: SocialLink[] = [];
-    if (cv.contact.linkedin) {
-      defaults.push({ id: 'link-li', platform: 'LinkedIn', url: cv.contact.linkedin });
+    if (cv.contact.github && !isPlaceholder(cv.contact.github) && !result.some((l) => l.platform === 'GitHub')) {
+      result.push({ id: 'link-gh', platform: 'GitHub', url: cv.contact.github });
     }
-    if (cv.contact.github) {
-      defaults.push({ id: 'link-gh', platform: 'GitHub', url: cv.contact.github });
+    if (cv.contact.portfolio && !isPlaceholder(cv.contact.portfolio) && !result.some((l) => l.platform === 'Portfolio' || l.platform === 'Personal')) {
+      result.push({ id: 'link-pf', platform: 'Portfolio', url: cv.contact.portfolio });
     }
-    if (cv.contact.portfolio) {
-      defaults.push({ id: 'link-pf', platform: 'Portfolio', url: cv.contact.portfolio });
-    }
-    return defaults;
+    return result;
   }, [cv.contact.socialLinks, cv.contact.linkedin, cv.contact.github, cv.contact.portfolio]);
 
   const updateLinks = (newLinks: SocialLink[]) => {
@@ -167,7 +324,7 @@ export function ContactSection() {
         </div>
       </div>
 
-      {/* 2. Social Links Section (Matching Resumeforfree 1:1) */}
+      {/* 2. Social Links Section */}
       <div className="pt-3 border-t border-slate-200 dark:border-white/10">
         <div className="flex items-center justify-between mb-3.5">
           <div className="flex items-center gap-2">
@@ -200,93 +357,96 @@ export function ContactSection() {
           </div>
         ) : (
           <div className="space-y-2.5">
-            {links.map((link, index) => {
-              const platformMeta = PLATFORMS.find((p) => p.id === link.platform) || PLATFORMS[0];
-              const IconComp = platformMeta.icon;
-
-              return (
-                <div
-                  key={link.id}
-                  dir="ltr"
-                  className="flex items-center gap-2 p-2.5 rounded-2xl border border-slate-200/90 dark:border-white/10 bg-white dark:bg-[#0B1120] shadow-2xs text-left transition-colors"
-                >
-                  {/* Platform Select (With isolated custom chevron to avoid overlap in RTL/LTR) */}
-                  <div className="relative min-w-[145px] sm:min-w-[165px]">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-blue-600 dark:text-blue-400">
-                      <IconComp className="w-4 h-4" />
-                    </div>
-                    <select
+            {links.map((link, index) => (
+              <div
+                key={link.id}
+                className="p-3 rounded-2xl border border-slate-200/90 dark:border-white/10 bg-white dark:bg-[#0B1120] shadow-2xs space-y-2.5 transition-colors"
+              >
+                {/* Top Row: Platform Select + Custom Label + Reorder/Delete */}
+                <div className="flex items-center gap-2">
+                  {/* ── Beautiful custom platform dropdown ── */}
+                  <div className="w-[155px] sm:w-[175px] shrink-0">
+                    <PlatformDropdown
                       value={link.platform}
-                      onChange={(e) => updateSocialLink(link.id, 'platform', e.target.value as SocialPlatform)}
-                      className="w-full h-9 pl-9 pr-7 rounded-xl border border-slate-200/90 dark:border-white/10 bg-slate-50/80 dark:bg-[#060913] text-[12.5px] font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer appearance-none"
-                    >
-                      {PLATFORMS.map((p) => (
-                        <option key={p.id} value={p.id} className="bg-white dark:bg-[#0B1120] text-slate-900 dark:text-white">
-                          {p.label}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  </div>
-
-                  {/* URL Input */}
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      dir="ltr"
-                      value={link.url}
-                      onChange={(e) => updateSocialLink(link.id, 'url', e.target.value)}
-                      placeholder={
-                        link.platform === 'LinkedIn'
-                          ? 'https://linkedin.com/in/username'
-                          : link.platform === 'GitHub'
-                          ? 'https://github.com/username'
-                          : link.platform === 'Twitter'
-                          ? 'https://x.com/username'
-                          : link.platform === 'Dribbble'
-                          ? 'https://dribbble.com/username'
-                          : link.platform === 'Medium'
-                          ? 'https://medium.com/@username'
-                          : 'https://yourwebsite.com'
-                      }
-                      className="w-full h-9 px-3.5 rounded-xl border border-slate-200/90 dark:border-white/10 bg-slate-50/80 dark:bg-[#060913] text-[12.5px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-blue-500 font-sans"
+                      onChange={(val) => updateSocialLink(link.id, 'platform', val)}
+                      isAr={isAr}
                     />
                   </div>
 
-                  {/* Up / Down Reorder Buttons */}
-                  <div className="flex items-center gap-0.5 border border-slate-200/90 dark:border-white/10 rounded-xl bg-slate-50/80 dark:bg-[#060913] p-0.5 shrink-0">
-                    <button
-                      type="button"
-                      disabled={index === 0}
-                      onClick={() => moveLink(index, 'up')}
-                      title="Move up"
-                      className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-white/10 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
-                    >
-                      <ChevronUp className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={index === links.length - 1}
-                      onClick={() => moveLink(index, 'down')}
-                      title="Move down"
-                      className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-white/10 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-colors"
-                    >
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </button>
+                  {/* Custom Label Input */}
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="text"
+                      value={link.customLabel || ''}
+                      onChange={(e) => updateSocialLink(link.id, 'customLabel', e.target.value)}
+                      placeholder={isAr ? "الاسم (مثال: لينكد إن، موقعي)" : "Display Name (optional)"}
+                      title={isAr ? "الاسم المعروض للرابط في السيرة الذاتية" : "Display name for this link"}
+                      className="w-full h-9 px-3 rounded-xl border border-slate-200/90 dark:border-white/10 bg-slate-50/80 dark:bg-[#040816] text-[12.5px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+                    />
                   </div>
 
-                  {/* Delete Trash Button */}
-                  <button
-                    type="button"
-                    onClick={() => removeSocialLink(link.id)}
-                    title="Delete link"
-                    className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer shrink-0"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {/* Actions: Reorder + Delete */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-0.5 border border-slate-200/90 dark:border-white/10 rounded-xl bg-slate-50/80 dark:bg-[#040816] p-0.5">
+                      <button
+                        type="button"
+                        disabled={index === 0}
+                        onClick={() => moveLink(index, 'up')}
+                        title={isAr ? "تحريك لأعلى" : "Move up"}
+                        className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-white/10 disabled:opacity-25 cursor-pointer disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={index === links.length - 1}
+                        onClick={() => moveLink(index, 'down')}
+                        title={isAr ? "تحريك لأسفل" : "Move down"}
+                        className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-white/10 disabled:opacity-25 cursor-pointer disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => removeSocialLink(link.id)}
+                      title={isAr ? "حذف الرابط" : "Delete link"}
+                      className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              );
-            })}
+
+                {/* Bottom Row: Full URL Input */}
+                <div className="relative w-full">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                    <LinkIcon className="w-3.5 h-3.5" />
+                  </div>
+                  <input
+                    type="url"
+                    dir="ltr"
+                    value={link.url}
+                    onChange={(e) => updateSocialLink(link.id, 'url', e.target.value)}
+                    placeholder={
+                      link.platform === 'LinkedIn'
+                        ? 'https://linkedin.com/in/username'
+                        : link.platform === 'GitHub'
+                        ? 'https://github.com/username'
+                        : link.platform === 'Twitter'
+                        ? 'https://x.com/username'
+                        : link.platform === 'Dribbble'
+                        ? 'https://dribbble.com/username'
+                        : link.platform === 'Medium'
+                        ? 'https://medium.com/@username'
+                        : 'https://yourwebsite.com'
+                    }
+                    className="w-full h-9 pl-9 pr-3 rounded-xl border border-slate-200/90 dark:border-white/10 bg-slate-50/80 dark:bg-[#040816] text-[12.5px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-blue-500 font-sans text-left transition-all"
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

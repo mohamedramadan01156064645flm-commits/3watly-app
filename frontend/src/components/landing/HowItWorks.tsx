@@ -68,24 +68,24 @@ export function HowItWorks() {
       ];
 
   return (
-    <section id="how-it-works" className="w-full bg-white dark:bg-[#060913] py-16 px-6 sm:px-10 lg:px-16 border-t border-slate-100 dark:border-white/5 transition-colors duration-300">
+    <section id="how-it-works" className="w-full bg-white dark:bg-[#040816] py-16 px-6 sm:px-10 lg:px-16 border-t border-slate-100 dark:border-white/5 transition-colors duration-300">
       <div className="max-w-[1400px] mx-auto">
         
         {/* Section Heading */}
         <div className="text-center max-w-3xl mx-auto space-y-3">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-300 text-[12px] font-bold tracking-wider uppercase border border-blue-100/80 dark:border-blue-500/30">
-            <Sparkles className="w-3.5 h-3.5" />
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg ltr:bg-gradient-to-r rtl:bg-gradient-to-l from-blue-600/10 to-transparent ltr:border-l-[3px] rtl:border-r-[3px] border-blue-600 dark:border-cyan-400 text-blue-700 dark:text-cyan-300 text-[12px] font-bold tracking-wide">
+            <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-cyan-400" />
             <span>{isAr ? "بسيطة • ذكية • مخصصة لك" : "Simple. Smart. Personalized."}</span>
           </div>
 
           <h2 className="text-3xl sm:text-4xl lg:text-[42px] font-black text-[#0F172A] dark:text-white leading-tight tracking-tight">
             {isAr ? (
               <>
-                كيف تعمل منصة <span className="bg-gradient-to-r from-[#1B57E0] to-[#10B981] bg-clip-text text-transparent">عواطلي</span>
+                كيف تعمل منصة <span className="bg-gradient-to-r from-[#00F5A0] via-[#00D2FF] to-[#38BDF8] bg-clip-text text-transparent">عواطلي</span>
               </>
             ) : (
               <>
-                How <span className="bg-gradient-to-r from-[#1B57E0] to-[#10B981] bg-clip-text text-transparent">3WATLY</span> Works
+                How <span className="bg-gradient-to-r from-[#00F5A0] via-[#00D2FF] to-[#38BDF8] bg-clip-text text-transparent">3WATLY</span> Works
               </>
             )}
           </h2>
@@ -106,7 +106,7 @@ export function HowItWorks() {
                 
                 {/* Number Badge */}
                 <div
-                  className={`absolute -top-5 left-1/2 z-20 flex h-10 w-10 -translate-x-1/2 items-center justify-center rounded-full text-[15px] font-black text-white ring-4 ring-white dark:ring-[#060913] shadow-md ${
+                  className={`absolute -top-5 left-1/2 z-20 flex h-10 w-10 -translate-x-1/2 items-center justify-center rounded-full text-[15px] font-black text-white ring-4 ring-white dark:ring-[#040816] shadow-md ${
                     isLast ? 'bg-emerald-500' : 'bg-blue-600'
                   }`}
                 >
@@ -116,15 +116,15 @@ export function HowItWorks() {
                 {/* Arrow to next step on desktop */}
                 {!isLast && (
                   <div
-                    className="absolute ltr:-right-4 rtl:-left-4 top-[42%] z-20 hidden h-8 w-8 items-center justify-center rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1120] shadow-md lg:flex"
+                    className="absolute ltr:-right-4 rtl:-left-4 top-[42%] z-20 hidden h-8 w-8 items-center justify-center rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-[#060D1E] shadow-md lg:flex"
                     aria-hidden="true"
                   >
-                    <ArrowRight className={`h-4 w-4 text-blue-600 dark:text-blue-400 ${isAr ? "rotate-180" : ""}`} />
+                    <ArrowRight className={`h-4 w-4 text-cyan-600 dark:text-cyan-400 ${isAr ? "rotate-180" : ""}`} />
                   </div>
                 )}
 
                 {/* Step Card Container */}
-                <div className="flex w-full flex-col rounded-[28px] border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0B1120] p-6 pt-9 shadow-xl shadow-slate-200/50 dark:shadow-[0_15px_35px_-10px_rgba(0,0,0,0.7),0_0_15px_rgba(99,102,241,0.06)] hover:shadow-2xl transition-all">
+                <div className="flex w-full flex-col rounded-[28px] border border-slate-200/80 dark:border-white/[0.08] dark:hover:border-cyan-500/30 bg-white dark:bg-[#060D1E] p-6 pt-9 shadow-xl shadow-slate-200/50 dark:shadow-[0_15px_35px_-10px_rgba(0,0,0,0.8),0_0_20px_rgba(0,210,255,0.04)] hover:shadow-2xl transition-all">
                   
                   {/* Visual Preview */}
                   <div className="h-[210px]">
@@ -175,6 +175,7 @@ export function HowItWorks() {
               src="/images/rocket-banner-bg.png"
               alt="Rocket banner background"
               fill
+              sizes="(max-width: 1024px) 100vw, 1200px"
               className="object-cover object-left opacity-90"
               priority
             />

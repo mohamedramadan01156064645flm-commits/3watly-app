@@ -27,7 +27,7 @@ export function LogoCloud() {
     <div className="w-full pt-4 pb-2">
       <div className="max-w-[1280px] mx-auto text-center">
         <p className="text-[12.5px] font-medium text-slate-500 dark:text-slate-400">
-          {isAr ? "يثق بنا محترفون من كبرى الشركات الرائدة" : "Trusted by professionals from leading companies"}
+          {isAr ? "شواغر وظيفية ومؤشرات سوق العمل من كبرى الشركات" : "Active job openings and hiring benchmarks from leading employers"}
         </p>
 
         <div className="mt-5 flex flex-wrap items-center justify-center gap-x-10 gap-y-5 sm:gap-x-14">

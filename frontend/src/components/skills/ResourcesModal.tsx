@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { BookOpen, Code2, Film, FolderGit2, LayoutGrid } from 'lucide-react';
 import { SkillIcon } from './SkillIcon';
 import { ResourceRow } from './ResourceRow';
-import type { PlannedSkill, ResourceKind } from '../../types/skills';
+import type { PlannedSkill, ResourceKind, SkillResource } from '../../types/skills';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ResourcesModalProps {
@@ -32,24 +32,82 @@ export function ResourcesModal({
   const [kind, setKind] = useState<ResourceKind | 'all'>(initialKind);
   const { isAr } = useLanguage();
 
+  const [apiResources, setApiResources] = useState<Record<string, SkillResource[]>>({});
+  const [loading, setLoading] = useState(true);
+
   const panelRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     if (!open) return;
+    
+    setLoading(true);
+    let mounted = true;
+
+    async function loadResources() {
+      try {
+        const results = await Promise.all(
+          skills.map(async (s) => {
+            if (!s?.def?.id) return { id: '', data: [] };
+            const res = await fetch(`/api/resources?skill_key=${encodeURIComponent(s.def.id)}`);
+            if (!res.ok) return { id: s.def.id, data: [] };
+            const json = await res.json();
+            const rawList = json.resources || [];
+            const normalizedList: SkillResource[] = rawList.map((dbItem: any) => {
+              let k: ResourceKind = 'docs';
+              const rawK = String(dbItem.kind || '').toLowerCase();
+              if (rawK === 'video' || rawK === 'youtube') k = 'video';
+              else if (rawK === 'course') k = 'course';
+              else if (rawK === 'project' || rawK === 'repo' || rawK === 'practice') k = 'project';
+              else if (rawK === 'docs' || rawK === 'article' || rawK === 'book') k = 'docs';
+
+              return {
+                title: (isAr && dbItem.title_ar) ? dbItem.title_ar : (dbItem.title || 'Untitled Resource'),
+                provider: dbItem.provider || '3watly',
+                kind: k,
+                hours: typeof dbItem.duration_hours === 'number' ? dbItem.duration_hours : (Number(dbItem.duration_hours) || dbItem.hours || 2),
+                free: dbItem.is_free !== undefined ? Boolean(dbItem.is_free) : (dbItem.free !== undefined ? Boolean(dbItem.free) : true),
+                url: dbItem.url || '',
+              };
+            });
+            return { id: s.def.id, data: normalizedList };
+          })
+        );
+        
+        if (!mounted) return;
+        
+        const newRes: Record<string, SkillResource[]> = {};
+        for (const r of results) {
+          if (r.id) newRes[r.id] = r.data;
+        }
+        setApiResources(newRes);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    loadResources();
+
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     panelRef.current?.focus();
     return () => {
+      mounted = false;
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
+  }, [open, onClose, skills, isAr]);
 
   // Flatten total visible resources for count
   const totalVisible = skills.reduce((acc, s) => {
-    return acc + s.def.resources.filter(r => kind === 'all' || r.kind === kind).length;
+    const fetched = apiResources[s.def.id] || [];
+    const staticList = s.def.resources || [];
+    const urlSet = new Set(fetched.map(r => r.url));
+    const merged = [...fetched, ...staticList.filter(sr => !urlSet.has(sr.url))];
+    return acc + merged.filter(r => kind === 'all' || r.kind === kind).length;
   }, 0);
 
   return (
@@ -136,7 +194,12 @@ export function ResourcesModal({
 
             {/* ── Resource list ── */}
             <div className="max-h-[55vh] overflow-y-auto px-6 py-4 space-y-5 scroll-slim">
-              {skills.length === 0 ? (
+              {loading ? (
+                <div className="py-12 flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 gap-3">
+                  <div className="w-6 h-6 border-2 border-[#1B57E0] border-t-transparent rounded-full animate-spin" />
+                  <p className="text-[13px]">{isAr ? 'جاري تحميل المصادر...' : 'Loading resources...'}</p>
+                </div>
+              ) : skills.length === 0 ? (
                 <p className="py-6 text-center text-[13px] text-slate-400 dark:text-slate-500">
                   {isAr
                     ? 'خطتك لا تحتوي على مهارات مفتوحة حالياً — اختر دوراً مستهدفاً جديداً.'
@@ -144,7 +207,17 @@ export function ResourcesModal({
                 </p>
               ) : (
                 skills.map((item) => {
-                  const resources = item.def.resources.filter(
+                  if (!item?.def) return null;
+                  const fetchedRes = apiResources[item.def.id] || [];
+                  const mergedResources = [...fetchedRes];
+                  const urlSet = new Set(fetchedRes.map(r => r.url));
+                  for (const sr of (item.def.resources || [])) {
+                    if (!urlSet.has(sr.url)) {
+                      mergedResources.push(sr);
+                    }
+                  }
+
+                  const resources = mergedResources.filter(
                     (r) => kind === 'all' || r.kind === kind
                   );
                   if (resources.length === 0) return null;
@@ -164,9 +237,9 @@ export function ResourcesModal({
                       {/* Resource rows */}
                       <div className="space-y-2">
                         <AnimatePresence initial={false}>
-                          {resources.map((r) => (
+                          {resources.map((r, rIdx) => (
                             <motion.div
-                              key={r.title}
+                              key={`${r.title}-${r.url || rIdx}`}
                               initial={{ opacity: 0, y: 6 }}
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, y: -4 }}
