@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Trophy, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Trophy, ArrowRight, CheckCircle2, Film } from 'lucide-react';
 import { SkillIcon } from './SkillIcon';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { PlannedSkill, SkillPlan } from '@/types/skills';
@@ -10,9 +10,10 @@ import type { PlannedSkill, SkillPlan } from '@/types/skills';
 interface SequencedActionPlanProps {
   plan: SkillPlan;
   onSelectSkill?: (skill: PlannedSkill) => void;
+  onCompleteSkill?: (skill: PlannedSkill) => void;
 }
 
-export function SequencedActionPlan({ plan, onSelectSkill }: SequencedActionPlanProps) {
+export function SequencedActionPlan({ plan, onSelectSkill, onCompleteSkill }: SequencedActionPlanProps) {
   const { isAr } = useLanguage();
 
   // Combine priorities and future gaps in logical sequential order
@@ -46,8 +47,8 @@ export function SequencedActionPlan({ plan, onSelectSkill }: SequencedActionPlan
       const hours = Math.round(item.remainingHours || item.def.hours || 10);
       const modulesCount = item.def.actions?.length || 4;
       const modulesText = isAr
-        ? `${modulesCount} وحدات تطبيقية · ${hours} س`
-        : `${modulesCount} Modules · ${hours}h`;
+        ? `${modulesCount} وحدات تطبيقية · ${hours} ساعات`
+        : `${modulesCount} Modules · ${hours} Hours`;
 
       return {
         step: idx + 1,
@@ -104,14 +105,16 @@ export function SequencedActionPlan({ plan, onSelectSkill }: SequencedActionPlan
                   <div className="absolute left-[15px] rtl:left-auto rtl:right-[15px] top-[32px] bottom-[-16px] w-0.5 bg-slate-200 dark:bg-white/10 z-0" />
                 )}
 
-                {/* Clickable row */}
-                <button
-                  type="button"
-                  onClick={() => onSelectSkill && onSelectSkill(item.originalSkill)}
-                  className="relative z-10 w-full flex items-center justify-between group rounded-xl px-2 py-1.5 -mx-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer text-left rtl:text-right"
+                {/* Row Container */}
+                <div
+                  className="relative z-10 w-full flex items-center justify-between group rounded-xl px-2 py-1.5 -mx-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-left rtl:text-right"
                 >
-                  {/* Step Circle & Tile */}
-                  <div className="flex items-center gap-3 min-w-0">
+                  {/* Step Circle, Icon & Info Button */}
+                  <button
+                    type="button"
+                    onClick={() => onSelectSkill && onSelectSkill(item.originalSkill)}
+                    className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer text-left rtl:text-right"
+                  >
                     <span
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black shadow-xs ${item.circleClass}`}
                     >
@@ -135,11 +138,41 @@ export function SequencedActionPlan({ plan, onSelectSkill }: SequencedActionPlan
                         {item.modules}
                       </span>
                     </div>
-                  </div>
+                  </button>
 
-                  {/* Action arrow */}
-                  <ArrowRight className={`shrink-0 w-3.5 h-3.5 text-slate-300 dark:text-white/20 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${isAr ? 'rotate-180' : ''}`} />
-                </button>
+                  {/* Actions */}
+                  <div className="flex items-center gap-1.5 shrink-0 ltr:ml-2 rtl:mr-2">
+                    {onSelectSkill && (
+                      <button
+                        type="button"
+                        onClick={() => onSelectSkill(item.originalSkill)}
+                        title={isAr ? "فيديوهات وكورسات المهارة" : "Videos & Courses"}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-[11px] font-bold transition-colors cursor-pointer border border-purple-200/60 dark:border-purple-800/40"
+                      >
+                        <Film className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                        <span className="hidden sm:inline">{isAr ? "كورسات" : "Courses"}</span>
+                      </button>
+                    )}
+                    {onCompleteSkill && (
+                      <button
+                        type="button"
+                        onClick={() => onCompleteSkill(item.originalSkill)}
+                        title={isAr ? "إكمال وإضافة للـ CV" : "Mark completed & add to CV"}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-400 transition-colors cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onSelectSkill && onSelectSkill(item.originalSkill)}
+                      className="p-1 text-slate-300 dark:text-white/20 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors cursor-pointer"
+                      aria-label={isAr ? "تفاصيل المهارة" : "Skill details"}
+                    >
+                      <ArrowRight className={`w-3.5 h-3.5 ${isAr ? 'rotate-180' : ''}`} />
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>

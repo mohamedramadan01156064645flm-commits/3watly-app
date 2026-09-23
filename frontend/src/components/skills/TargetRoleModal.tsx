@@ -49,7 +49,7 @@ export function TargetRoleModal({ open, onClose }: { open: boolean; onClose: () 
     }
   }, [open, roleId]);
 
-  const labels     = useMemo(() => TARGET_ROLES.map(r => r.title), []);
+  const labels     = useMemo(() => TARGET_ROLES.map(r => isAr ? r.title : r.titleEn), [isAr]);
   const activeIdx  = mod(pos, TARGET_ROLES.length);
   const activeRole = TARGET_ROLES[activeIdx];
 
@@ -125,8 +125,8 @@ export function TargetRoleModal({ open, onClose }: { open: boolean; onClose: () 
           <button
             type="button"
             onClick={onClose}
-            aria-label="إغلاق"
-            className="absolute top-3 right-3 z-20 grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-white/[0.07] text-slate-300 outline-none transition-colors hover:bg-white/[0.14] hover:text-white cursor-pointer"
+            aria-label={isAr ? "إغلاق" : "Close"}
+            className="absolute top-3 ltr:right-3 rtl:left-3 z-20 grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-white/[0.07] text-slate-300 outline-none transition-colors hover:bg-white/[0.14] hover:text-white cursor-pointer"
             style={{ boxShadow: '0 4px 12px rgba(0,0,0,.5)' }}
           >
             <XIcon className="h-4 w-4" strokeWidth={2.5} />
@@ -148,10 +148,10 @@ export function TargetRoleModal({ open, onClose }: { open: boolean; onClose: () 
               </span>
 
               <h2 className="text-[18px] font-extrabold text-white sm:text-[21px]">
-                أكثر المسمى الوظيفي{' '}
+                {isAr ? 'المسمى الوظيفي ' : 'Target '}
                 <span className="bg-clip-text text-transparent"
                   style={{ backgroundImage: 'linear-gradient(90deg,#C084FC 0%,#F472B6 100%)' }}>
-                  المستهدف
+                  {isAr ? 'المستهدف' : 'Career Role'}
                 </span>
               </h2>
 
@@ -160,7 +160,9 @@ export function TargetRoleModal({ open, onClose }: { open: boolean; onClose: () 
             </div>
 
             <p className="mt-1.5 text-[12px] text-slate-400">
-              يتم إعادة حساب مهاراتك والوظائف المطابقة لك بناءً على المسمى الذي تختاره.
+              {isAr
+                ? 'يتم إعادة حساب مهاراتك والوظائف المطابقة لك بناءً على المسمى الذي تختاره.'
+                : 'Your skills and matched roadmap are automatically recalculated based on your selected role.'}
             </p>
 
             <div className="mt-3 h-px"
@@ -174,12 +176,12 @@ export function TargetRoleModal({ open, onClose }: { open: boolean; onClose: () 
             aria-roledescription="carousel"
           >
             {/* Arrows */}
-            <button type="button" onClick={() => step(-1)} aria-label="السابق"
+            <button type="button" onClick={() => step(-1)} aria-label={isAr ? "السابق" : "Previous"}
               className="absolute left-1 top-1/2 z-[60] -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full border border-white/12 bg-white/[0.07] text-slate-300 outline-none transition-colors hover:bg-white/[0.14] hover:text-white active:scale-95 cursor-pointer"
               style={{ boxShadow: '0 6px 18px rgba(0,0,0,.55)' }}>
               <ChevronLeftIcon className="h-4 w-4" strokeWidth={2.3} />
             </button>
-            <button type="button" onClick={() => step(1)} aria-label="التالي"
+            <button type="button" onClick={() => step(1)} aria-label={isAr ? "التالي" : "Next"}
               className="absolute right-1 top-1/2 z-[60] -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full border border-white/12 bg-white/[0.07] text-slate-300 outline-none transition-colors hover:bg-white/[0.14] hover:text-white active:scale-95 cursor-pointer"
               style={{ boxShadow: '0 6px 18px rgba(0,0,0,.55)' }}>
               <ChevronRightIcon className="h-4 w-4" strokeWidth={2.3} />

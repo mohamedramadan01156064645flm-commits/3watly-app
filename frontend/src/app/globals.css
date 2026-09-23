@@ -93,13 +93,37 @@
     visibility: hidden !important;
   }
 
-  /* 3. Make ONLY the CV paper and its descendants visible */
+  /* 3. Make ONLY the CV paper or Roadmap print container visible */
   #cv-paper-root,
-  #cv-paper-root * {
+  #cv-paper-root *,
+  #roadmap-print-root,
+  #roadmap-print-root * {
     visibility: visible !important;
   }
 
-  /* 4. Position the CV paper cleanly at the top of the printed page */
+  /* 4. Position the Roadmap print container cleanly */
+  #roadmap-print-root {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    z-index: 9999999 !important;
+    font-family: 'Cairo', 'Plus Jakarta Sans', -apple-system, sans-serif !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #roadmap-print-root * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 5. Position the CV paper cleanly at the top of the printed page */
   #cv-paper-root {
     position: absolute !important;
     left: 0 !important;

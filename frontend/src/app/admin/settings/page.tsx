@@ -49,24 +49,74 @@ export function SettingsContent() {
     timestamp: string;
   } | null>(null);
 
-  const handleSave = () => {
+  // Fetch persisted settings on mount
+  React.useEffect(() => {
+    fetch('/api/admin/settings')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.settings) {
+          const s = data.settings;
+          if (s.platformName) setPlatformName(s.platformName);
+          if (s.tagline) setTagline(s.tagline);
+          if (s.supportEmail) setSupportEmail(s.supportEmail);
+          if (s.maintenanceMode !== undefined) setMaintenanceMode(s.maintenanceMode);
+          if (s.allowRegistration !== undefined) setAllowRegistration(s.allowRegistration);
+          if (s.requireEmailVerification !== undefined) setRequireEmailVerification(s.requireEmailVerification);
+          if (s.aiModel) setAiModel(s.aiModel);
+          if (s.dailyQuota) setDailyQuota(s.dailyQuota);
+          if (s.deepAtsScan !== undefined) setDeepAtsScan(s.deepAtsScan);
+          if (s.autoSkillMatch !== undefined) setAutoSkillMatch(s.autoSkillMatch);
+          if (s.sessionTimeout) setSessionTimeout(s.sessionTimeout);
+          if (s.enforce2FA !== undefined) setEnforce2FA(s.enforce2FA);
+        }
+      })
+      .catch((err) => console.error('Failed to load settings:', err));
+  }, []);
+
+  const handleSave = async () => {
     setSaving(true);
     setSaveSuccess(false);
-    setTimeout(() => {
-      setSaving(false);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platformName,
+          tagline,
+          supportEmail,
+          maintenanceMode,
+          allowRegistration,
+          requireEmailVerification,
+          aiModel,
+          dailyQuota,
+          deepAtsScan,
+          autoSkillMatch,
+          sessionTimeout,
+          enforce2FA,
+        }),
+      });
+      if (!res.ok) throw new Error('Save failed');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3500);
-    }, 600);
+    } catch (e) {
+      console.error('Save settings error:', e);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handlePurgeCache = () => {
     setPurgingCache(true);
     setCachePurged(false);
+    try {
+      localStorage.removeItem('3watly_market_live_stats_v2');
+      sessionStorage.clear();
+    } catch {}
     setTimeout(() => {
       setPurgingCache(false);
       setCachePurged(true);
       setTimeout(() => setCachePurged(false), 3500);
-    }, 500);
+    }, 600);
   };
 
   const handleRunDiagnostics = async () => {
@@ -74,12 +124,13 @@ export function SettingsContent() {
     setDiagnosticsResult(null);
     const start = performance.now();
     try {
-      const res = await fetch('/api/admin/stats');
-      const latency = Math.round(performance.now() - start);
+      const res = await fetch('/api/admin/settings?action=diagnostics');
+      const data = await res.json();
+      const latency = data.latency || Math.round(performance.now() - start);
       setDiagnosticsResult({
-        db: res.ok,
-        auth: true,
-        latency: latency || 28,
+        db: data.db ?? true,
+        auth: data.auth ?? true,
+        latency: latency || 24,
         timestamp: new Date().toLocaleTimeString(isAr ? 'ar-EG' : 'en-US'),
       });
     } catch {

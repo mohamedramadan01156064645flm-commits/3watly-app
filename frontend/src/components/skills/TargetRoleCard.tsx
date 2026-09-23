@@ -4,6 +4,7 @@ import React from 'react';
 import { BriefcaseIcon, FlameIcon, MapPinIcon, TrendingUpIcon } from 'lucide-react';
 import { CardWaves } from './CardWaves';
 import { RoleItem } from '@/data/rolesData';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface TargetRoleCardProps {
   role: RoleItem;
@@ -14,6 +15,7 @@ interface TargetRoleCardProps {
 }
 
 export function TargetRoleCard({ role, isActive, width, height, onSelect }: TargetRoleCardProps) {
+  const { isAr } = useLanguage();
   const t = role.theme;
   const Icon = role.icon;
 
@@ -21,9 +23,15 @@ export function TargetRoleCard({ role, isActive, width, height, onSelect }: Targ
   const glyph = isActive ? 26 : 20;
   const pad = isActive ? 14 : 10;
 
+  const title = isAr ? role.title : role.titleEn;
+  const description = isAr ? role.description : (role.descriptionEn || role.description);
+  const locationText = isAr
+    ? role.location.split('/')[0].trim()
+    : (role.locationEn || role.location).split('/')[0].trim();
+
   return (
     <div
-      dir="rtl"
+      dir={isAr ? 'rtl' : 'ltr'}
       aria-current={isActive ? 'true' : undefined}
       className="relative select-none cursor-pointer group"
       onClick={onSelect}
@@ -106,7 +114,7 @@ export function TargetRoleCard({ role, isActive, width, height, onSelect }: Targ
 
             {role.hot && (
               <div
-                dir="rtl"
+                dir={isAr ? 'rtl' : 'ltr'}
                 className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10.5px] font-bold text-white shadow-md"
                 style={{
                   backgroundImage: 'linear-gradient(90deg, #1668C9 0%, #2E90F2 100%)',
@@ -114,7 +122,7 @@ export function TargetRoleCard({ role, isActive, width, height, onSelect }: Targ
                 }}
               >
                 <FlameIcon className="h-3 w-3 text-[#FF8A3D]" fill="currentColor" strokeWidth={1.2} />
-                <span>الأكثر طلباً</span>
+                <span>{isAr ? 'الأكثر طلباً' : 'In Demand'}</span>
               </div>
             )}
           </div>
@@ -125,15 +133,15 @@ export function TargetRoleCard({ role, isActive, width, height, onSelect }: Targ
               className="font-extrabold text-white leading-tight transition-all duration-300 line-clamp-2"
               style={{ fontSize: isActive ? 15 : 13 }}
             >
-              {role.title}
+              {title}
             </h3>
 
-            {role.subtitle && (
+            {isAr && role.titleEn && (
               <p
                 dir="ltr"
                 className="font-semibold text-white/85 text-[11px] leading-tight truncate"
               >
-                {role.subtitle}
+                ({role.titleEn})
               </p>
             )}
 
@@ -141,7 +149,7 @@ export function TargetRoleCard({ role, isActive, width, height, onSelect }: Targ
               className="text-slate-300/85 leading-snug line-clamp-2 px-1"
               style={{ fontSize: isActive ? 11 : 10 }}
             >
-              {role.description}
+              {description}
             </p>
           </div>
 
@@ -161,15 +169,15 @@ export function TargetRoleCard({ role, isActive, width, height, onSelect }: Targ
 
             <div className="flex items-center gap-1">
               <BriefcaseIcon className="h-3 w-3" style={{ color: t.accent }} strokeWidth={2} />
-              <span className="text-[10px] font-bold text-slate-200 leading-none truncate max-w-[54px]">
-                {role.jobs} وظيفة
+              <span className="text-[10px] font-bold text-slate-200 leading-none truncate max-w-[65px]">
+                {role.jobs} {isAr ? 'وظيفة' : 'jobs'}
               </span>
             </div>
 
             <div className="flex items-center gap-1">
               <MapPinIcon className="h-3 w-3" style={{ color: t.accent }} strokeWidth={2} />
-              <span className="text-[10px] font-bold text-slate-200 leading-none truncate max-w-[42px]">
-                {role.location.split('/')[0].trim()}
+              <span className="text-[10px] font-bold text-slate-200 leading-none truncate max-w-[50px]">
+                {locationText}
               </span>
             </div>
           </div>

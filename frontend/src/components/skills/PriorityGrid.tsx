@@ -9,9 +9,10 @@ import type { SkillPlan, PlannedSkill } from '@/types/skills';
 interface PriorityGridProps {
   plan: SkillPlan;
   onSelectSkill?: (skill: PlannedSkill) => void;
+  onCompleteSkill?: (skill: PlannedSkill) => void;
 }
 
-export function PriorityGrid({ plan, onSelectSkill }: PriorityGridProps) {
+export function PriorityGrid({ plan, onSelectSkill, onCompleteSkill }: PriorityGridProps) {
   const { isAr } = useLanguage();
 
   // Dynamically select the top priority skills from real calculated plan
@@ -128,14 +129,22 @@ export function PriorityGrid({ plan, onSelectSkill }: PriorityGridProps) {
                 </div>
               </div>
 
-              <div className="mt-5 pt-3">
+              <div className="mt-5 pt-3 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => onSelectSkill && onSelectSkill(item)}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 text-xs transition-colors cursor-pointer shadow-xs active:scale-98"
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 text-xs transition-colors cursor-pointer shadow-xs active:scale-98"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>{isAr ? "موارد التعلم والتطبيق" : "Learning Resources"}</span>
+                  <span>{isAr ? "موارد التعلم" : "Resources"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onCompleteSkill && onCompleteSkill(item)}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 text-xs transition-colors cursor-pointer shadow-xs active:scale-98"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>{isAr ? "أكملتها" : "Completed"}</span>
                 </button>
               </div>
             </div>

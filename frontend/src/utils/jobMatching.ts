@@ -1,4 +1,10 @@
 import type { JobItem } from '@/data/jobs';
+import {
+  normalizeSkillName as taxonomyNormalizeSkillName,
+  areSkillsEquivalent,
+  canonicalizeSkill,
+  sanitizeSkillKey
+} from './skillTaxonomy';
 
 export const SKILL_ALIASES: Record<string, string> = {
   'reactjs': 'React', 'react.js': 'React', 'react native': 'React Native',
@@ -15,7 +21,10 @@ export const SKILL_ALIASES: Record<string, string> = {
   'tensorflow': 'TensorFlow', 'pytorch': 'PyTorch',
   'restapi': 'REST APIs', 'rest api': 'REST APIs', 'rest': 'REST APIs', 'restful': 'REST APIs',
   'ci/cd': 'CI/CD', 'cicd': 'CI/CD', 'github actions': 'CI/CD',
-  'nlp': 'NLP', 'etl': 'ETL', 'ui/ux': 'UI/UX', 'ux': 'UI/UX', 'ui': 'UI/UX',
+  'nlp': 'NLP', 'etl': 'ETL', 'etl pipelines': 'ETL', 'etl pipeline': 'ETL',
+  'etl pipline': 'ETL', 'etl piplines': 'ETL', 'extract transform load': 'ETL',
+  'extract, transform, load': 'ETL', 'extract-transform-load': 'ETL',
+  'ui/ux': 'UI/UX', 'ux': 'UI/UX', 'ui': 'UI/UX',
   'pandas': 'Pandas', 'numpy': 'NumPy',
   'excel': 'Excel', 'microsoft excel': 'Excel', 'ms excel': 'Excel',
   'b2b sales': 'B2B Sales', 'b2b': 'B2B Sales', 'business development': 'Business Development',
@@ -59,7 +68,8 @@ export function normalizeSkillName(raw: string): string {
   if (!raw) return '';
   const cleaned = raw.replace(/^[\s\u2022\u25CF\-\s*\t]+/, '').replace(/[:\s]+$/, '').trim();
   const lower = cleaned.toLowerCase().replace(/\s+/g, ' ');
-  return SKILL_ALIASES[lower] || cleaned;
+  if (SKILL_ALIASES[lower]) return SKILL_ALIASES[lower];
+  return taxonomyNormalizeSkillName(cleaned);
 }
 
 export function isSkillSatisfied(
@@ -76,8 +86,12 @@ export function isSkillSatisfied(
   // Single/double letter skill flag (e.g. 'r', 'c', 'go', 'ai', 'bi', 'ui', 'ux')
   const isShortReq = lowReq.length <= 2;
 
-  // 1. Direct exact or normalized match
+  // 1. Direct exact or normalized match or taxonomy equivalence
   for (const u of userSkills) {
+    if (areSkillsEquivalent(reqSkill, u)) {
+      return { satisfied: true, fitPct: 100, matchedWith: normalizeSkillName(u) };
+    }
+
     const normUser = normalizeSkillName(u);
     const lowUser = normUser.toLowerCase().trim();
     if (lowReq === lowUser) {
@@ -98,21 +112,19 @@ export function isSkillSatisfied(
     }
   }
 
-  // 2. Token / word-boundary match (e.g. 'Python' in 'Python 3', 'REST APIs' in 'REST API')
-  // STRICT RULE: Both user skill and required skill must be at least 4 chars long to do token boundary matches
-  if (!isShortReq) {
-    for (const u of userSkills) {
-      const normUser = normalizeSkillName(u);
-      const lowUser = normUser.toLowerCase().trim();
-      if (lowUser.length >= 4 && lowReq.length >= 4) {
-        const escapedUser = lowUser.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const escapedReq = lowReq.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const userInReqRegex = new RegExp(`(^|\\s|\\b)${escapedUser}(\\b|\\s|$)`, 'i');
-        const reqInUserRegex = new RegExp(`(^|\\s|\\b)${escapedReq}(\\b|\\s|$)`, 'i');
+  // 2. Token / word-boundary match (e.g. 'Python' in 'Python 3', 'ETL' in 'ETL Pipelines', 'REST APIs' in 'REST API')
+  // Allow matching when token is at least 3 chars (e.g. 'etl', 'sql', 'aws', 'git')
+  for (const u of userSkills) {
+    const normUser = normalizeSkillName(u);
+    const lowUser = normUser.toLowerCase().trim();
+    if (lowUser.length >= 3 && lowReq.length >= 3) {
+      const escapedUser = lowUser.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escapedReq = lowReq.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const userInReqRegex = new RegExp(`(^|[^a-z0-9])${escapedUser}([^a-z0-9]|$)`, 'i');
+      const reqInUserRegex = new RegExp(`(^|[^a-z0-9])${escapedReq}([^a-z0-9]|$)`, 'i');
 
-        if (userInReqRegex.test(lowReq) || reqInUserRegex.test(lowUser)) {
-          return { satisfied: true, fitPct: 90, matchedWith: normUser };
-        }
+      if (userInReqRegex.test(lowReq) || reqInUserRegex.test(lowUser)) {
+        return { satisfied: true, fitPct: 90, matchedWith: normUser };
       }
     }
   }

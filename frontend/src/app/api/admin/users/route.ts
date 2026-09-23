@@ -27,13 +27,17 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from('profiles')
-      .select('id, full_name, email, role, account_status, created_at, onboarding_completed, avatar_url', { count: 'exact' });
+      .select('id, full_name, email, role, account_status, created_at, updated_at, onboarding_completed, avatar_url', { count: 'exact' });
 
     if (search) {
       query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
     }
     if (role) {
-      query = query.eq('role', role);
+      if (role === 'staff') {
+        query = query.in('role', ['admin', 'owner']);
+      } else {
+        query = query.eq('role', role);
+      }
     }
     if (status) {
       query = query.eq('account_status', status);
@@ -45,9 +49,38 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
+    // Fetch auth users to get authentic last_sign_in_at and updated_at
+    const authUsersRes = await supabase.auth.admin.listUsers({ page: 1, perPage: 100 }).catch(() => null);
+    const authUsersMap = new Map<string, any>();
+    if (authUsersRes?.data?.users) {
+      authUsersRes.data.users.forEach((u: any) => {
+        if (u.id) authUsersMap.set(u.id, u);
+        if (u.email) authUsersMap.set(u.email.toLowerCase(), u);
+      });
+    }
+
+    const fortyFiveMinutesAgo = Date.now() - 45 * 60 * 1000;
+
+    let enrichedUsers = (data ?? []).map((u: any) => {
+      const authUser = authUsersMap.get(u.id) || (u.email ? authUsersMap.get(u.email.toLowerCase()) : null);
+      const lastSeen = authUser?.last_sign_in_at || authUser?.updated_at || u.updated_at || u.created_at;
+      const isOnline = lastSeen ? (new Date(lastSeen).getTime() >= fortyFiveMinutesAgo) : false;
+
+      return {
+        ...u,
+        last_seen_at: lastSeen,
+        is_online: isOnline,
+      };
+    });
+
+    const presence = searchParams.get('presence');
+    if (presence === 'online') {
+      enrichedUsers = enrichedUsers.filter((u: any) => u.is_online);
+    }
+
     return NextResponse.json({
-      users: data ?? [],
-      total: count ?? 0,
+      users: enrichedUsers,
+      total: presence === 'online' ? enrichedUsers.length : (count ?? 0),
       page,
       limit,
     });

@@ -1,14 +1,34 @@
-import { allSkills, industries, regions, timeframes, SkillBar } from '../data/market';
+import {
+  careerTracks,
+  workModels,
+  experienceLevels,
+  SkillBar,
+  CareerTrack,
+  WorkModel,
+  ExperienceLevel,
+} from '../data/market';
 
-export type Filters = {industry: string;region: string;timeframe: string;};
+export type Filters = {
+  track: string;
+  workModel: string;
+  experience: string;
+};
 
-export const defaultFilters: Filters = { industry: 'tech', region: 'cairo-alex', timeframe: '90' };
+export const defaultFilters: Filters = {
+  track: 'all',
+  workModel: 'all',
+  experience: 'all',
+};
 
-function resolve(filters: Filters) {
+function resolve(filters: Filters): {
+  track: CareerTrack;
+  workModel: WorkModel;
+  experience: ExperienceLevel;
+} {
   return {
-    industry: industries.find((i) => i.id === filters.industry) ?? industries[0],
-    region: regions.find((r) => r.id === filters.region) ?? regions[0],
-    timeframe: timeframes.find((t) => t.id === filters.timeframe) ?? timeframes[1]
+    track: careerTracks.find((t) => t.id === filters.track) ?? careerTracks[0],
+    workModel: workModels.find((w) => w.id === filters.workModel) ?? workModels[0],
+    experience: experienceLevels.find((e) => e.id === filters.experience) ?? experienceLevels[0],
   };
 }
 
@@ -19,59 +39,76 @@ export type StatSet = {
   companiesDelta: number;
   remote: number;
   remoteDelta: number;
-  topSkill: {name: string;share: number;};
+  topSkill: { name: string; share: number };
 };
 
 export function getStats(filters: Filters): StatSet {
-  const { industry, region, timeframe } = resolve(filters);
-  const jobs = Math.round(industry.jobs * region.scale * timeframe.scale);
-  const companies = Math.round(industry.companies * region.scale * (0.72 + timeframe.scale * 0.28));
-  const remote = Math.max(6, Math.min(74, industry.remote + region.remoteAdj));
-  const seed = industry.label.length + region.label.length + Number(timeframe.id);
+  const { track, workModel, experience } = resolve(filters);
+
+  // Scaled jobs & companies based on workModel and experience level
+  const jobs = Math.round(track.jobs * workModel.scale * experience.scale);
+  const companies = Math.round(track.companies * workModel.scale * (0.8 + experience.scale * 0.2));
+
+  // Remote percentage adjusts based on workModel
+  const baseRemote = workModel.id === 'remote' ? 100 : workModel.id === 'cairo-giza' ? 22.5 : track.remote;
+  const remote = Math.max(8, Math.min(100, baseRemote + workModel.remoteAdj * 0.2));
+
+  const seed = track.label.length + workModel.label.length + experience.label.length;
 
   return {
     jobs,
-    jobsDelta: Number((5 + seed % 7 + timeframe.scale).toFixed(1)),
+    jobsDelta: Number((12 + (seed % 9) * 1.5).toFixed(1)),
     companies,
-    companiesDelta: Number((3.4 + seed % 5 * 0.8).toFixed(1)),
+    companiesDelta: Number((8 + (seed % 6) * 1.2).toFixed(1)),
     remote: Number(remote.toFixed(1)),
-    remoteDelta: Number((2.1 + seed % 4 * 0.9).toFixed(1)),
-    topSkill: industry.topSkill
+    remoteDelta: Number((5 + (seed % 5) * 0.8).toFixed(1)),
+    topSkill: track.topSkill,
   };
 }
 
 export function getSkillRanking(filters: Filters): SkillBar[] {
-  const { industry, region, timeframe } = resolve(filters);
-  const regionShift = region.remoteAdj * 0.25;
-  const timeShift = Number(timeframe.id) % 90 * 0.02;
+  const { track, workModel, experience } = resolve(filters);
+  const remoteBump = workModel.id === 'remote' || workModel.id === 'gulf-global' ? 3 : 0;
+  const expFactor = experience.id === 'senior' ? 1.05 : experience.id === 'entry' ? 0.95 : 1.0;
 
-  return allSkills.
-  map((skill) => {
-    const bias = industry.bias[skill.name] ?? 0.88;
-    const value = Math.round(Math.max(4, Math.min(96, skill.value * bias + regionShift + timeShift)));
-    return { ...skill, value };
-  }).
-  sort((a, b) => b.value - a.value);
+  return track.skills
+    .map((skill, index) => {
+      // Small realistic variation based on work model and experience
+      const bonus = (skill.category === 'cloud' || skill.category === 'tool' ? remoteBump : 0);
+      const computedValue = Math.min(98, Math.max(15, Math.round(skill.value * expFactor + bonus)));
+      return {
+        ...skill,
+        value: computedValue,
+        rank: index + 1,
+      };
+    })
+    .sort((a, b) => b.value - a.value);
 }
 
 export function getTopSkills(filters: Filters): SkillBar[] {
   return getSkillRanking(filters).slice(0, 8);
 }
 
-export type ChartPoint = {tick: string;ai: number;docker: number;avg: number;};
+export type ChartPoint = {
+  tick: string;
+  ai: number;
+  docker: number;
+  avg: number;
+};
 
 export type ChartModel = {
   points: ChartPoint[];
   yTicks: number[];
   yMax: number;
-  peaks: {ai: number;docker: number;avg: number;};
+  peaks: { ai: number; docker: number; avg: number };
+  seriesLabels: { primary: string; secondary: string; average: string };
   formatY: (value: number) => string;
   formatValue: (value: number) => string;
-  badges: {ai: string;docker: string;avg: string;};
+  badges: { ai: string; docker: string; avg: string };
 };
 
 const shape = (t: number, max: number, bend: number) =>
-max * (1 - Math.exp(-bend * t)) / (1 - Math.exp(-bend));
+  (max * (1 - Math.exp(-bend * t))) / (1 - Math.exp(-bend));
 
 function niceTicks(max: number): number[] {
   const raw = max / 5;
@@ -81,47 +118,33 @@ function niceTicks(max: number): number[] {
 }
 
 export function getChartModel(filters: Filters, metric: string): ChartModel {
-  const { industry, region, timeframe } = resolve(filters);
-  const volume = industry.jobs * region.scale / 1000;
-
-  const scaleFor = (base: number) => {
-    if (metric === 'postings') return Math.round(base * volume * 1.8);
-    if (metric === 'share') return Number((base * 0.34).toFixed(1));
-    return base;
-  };
+  const { track } = resolve(filters);
+  const primaryPeak = parseInt(track.trendingHighlights.primary.badge.replace(/[^0-9]/g, '')) || 45;
+  const secondaryPeak = parseInt(track.trendingHighlights.secondary.badge.replace(/[^0-9]/g, '')) || 28;
+  const avgPeak = parseInt(track.trendingHighlights.average.badge.replace(/[^0-9]/g, '')) || 12;
 
   const peaks = {
-    ai: scaleFor(timeframe.peaks.ai),
-    docker: scaleFor(timeframe.peaks.docker),
-    avg: scaleFor(timeframe.peaks.avg)
+    ai: primaryPeak,
+    docker: secondaryPeak,
+    avg: avgPeak,
   };
+
+  const ticks = ['May 1', 'May 15', 'Jun 1', 'Jun 15', 'Jul 1', 'Jul 15', 'Jul 30'];
 
   const points: ChartPoint[] = Array.from({ length: 25 }, (_, i) => {
     const t = i / 24;
-    const wobble = Math.sin(i * 1.7) * (metric === 'postings' ? peaks.ai * 0.012 : 0.5);
+    const wobble = Math.sin(i * 1.5) * (peaks.ai * 0.04);
     return {
-      tick: i % 4 === 0 ? timeframe.ticks[i / 4] : '',
-      ai: Math.max(0, Number((shape(t, peaks.ai, 1.5) + (i === 0 ? 0 : wobble * 0.6)).toFixed(2))),
-      docker: Math.max(0, Number((shape(t, peaks.docker, 2.4) + (i === 0 ? 0 : wobble * 0.35)).toFixed(2))),
-      avg: Number(shape(t, peaks.avg, 1.2).toFixed(2))
+      tick: i % 4 === 0 ? ticks[i / 4] : '',
+      ai: Math.max(0, Number((shape(t, peaks.ai, 1.6) + (i === 0 ? 0 : wobble * 0.4)).toFixed(1))),
+      docker: Math.max(0, Number((shape(t, peaks.docker, 2.2) + (i === 0 ? 0 : wobble * 0.25)).toFixed(1))),
+      avg: Number(shape(t, peaks.avg, 1.2).toFixed(1)),
     };
   });
 
-  const formatY =
-  metric === 'postings' ?
-  (v: number) => v >= 1000 ? `${Math.round(v / 1000)}k` : String(Math.round(v)) :
-  (v: number) => `${Math.round(v)}%`;
-
-  const formatValue =
-  metric === 'postings' ?
-  (v: number) => Math.round(v).toLocaleString() :
-  (v: number) => `${v.toFixed(1)}%`;
-
-  const prefix = metric === 'growth' ? '+' : '';
-  const suffix = metric === 'postings' ? '' : '%';
-  const badge = (v: number) =>
-  metric === 'postings' ? `${prefix}${Math.round(v).toLocaleString()}` : `${prefix}${Math.round(v)}${suffix}`;
-
+  const formatY = (v: number) => `${Math.round(v)}%`;
+  const formatValue = (v: number) => `+${v.toFixed(1)}%`;
+  const badge = (v: number) => `+${Math.round(v)}%`;
   const yTicks = niceTicks(peaks.ai);
 
   return {
@@ -129,35 +152,58 @@ export function getChartModel(filters: Filters, metric: string): ChartModel {
     yTicks,
     yMax: yTicks[yTicks.length - 1],
     peaks,
+    seriesLabels: {
+      primary: track.trendingHighlights.primary.name,
+      secondary: track.trendingHighlights.secondary.name,
+      average: track.trendingHighlights.average.name,
+    },
     formatY,
     formatValue,
-    badges: { ai: badge(peaks.ai), docker: badge(peaks.docker), avg: badge(peaks.avg) }
+    badges: {
+      ai: track.trendingHighlights.primary.badge,
+      docker: track.trendingHighlights.secondary.badge,
+      avg: track.trendingHighlights.average.badge,
+    },
   };
 }
 
 export function filterSummary(filters: Filters) {
-  const { industry, region, timeframe } = resolve(filters);
-  return { industry: industry.label, region: region.label, timeframe: timeframe.label };
+  const { track, workModel, experience } = resolve(filters);
+  return {
+    track: track.label,
+    trackAr: track.labelAr,
+    workModel: workModel.label,
+    workModelAr: workModel.labelAr,
+    experience: experience.label,
+    experienceAr: experience.labelAr,
+  };
 }
 
 export function buildReportCsv(filters: Filters): string {
   const stats = getStats(filters);
   const summary = filterSummary(filters);
   const rows: string[][] = [
-  ['3WATLY Market Overview Report'],
-  ['Industry', summary.industry],
-  ['Region', summary.region],
-  ['Timeframe', summary.timeframe],
-  [],
-  ['Metric', 'Value', 'Change'],
-  ['Total analyzed jobs', String(stats.jobs), `+${stats.jobsDelta}%`],
-  ['Hiring companies', String(stats.companies), `+${stats.companiesDelta}%`],
-  ['Remote / hybrid ratio', `${stats.remote}%`, `+${stats.remoteDelta}%`],
-  ['Top in-demand skill', stats.topSkill.name, `${stats.topSkill.share}% of roles`],
-  [],
-  ['Rank', 'Skill', 'Share of postings'],
-  ...getSkillRanking(filters).map((s, i) => [String(i + 1), s.name, `${s.value}%`])];
-
+    ['3WATLY Tech Market Intelligence Report'],
+    ['Career Track', summary.track],
+    ['Work Model & Location', summary.workModel],
+    ['Experience Level', summary.experience],
+    [],
+    ['Key Metric', 'Value', 'Growth'],
+    ['Active analyzed jobs in Egypt', String(stats.jobs), `+${stats.jobsDelta}%`],
+    ['Hiring tech companies', String(stats.companies), `+${stats.companiesDelta}%`],
+    ['Remote / hybrid positions ratio', `${stats.remote}%`, `+${stats.remoteDelta}%`],
+    ['Top in-demand skill', stats.topSkill.name, `${stats.topSkill.share}% of open roles`],
+    [],
+    ['Rank', 'Skill Name', 'Category', 'Share of Postings', 'Growth Momentum', 'Estimated Job Openings'],
+    ...getSkillRanking(filters).map((s, i) => [
+      String(i + 1),
+      s.name,
+      s.categoryLabel || 'Tech',
+      `${s.value}%`,
+      s.trend || '+15%',
+      String(s.jobCount || 1000),
+    ]),
+  ];
 
   return rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
 }

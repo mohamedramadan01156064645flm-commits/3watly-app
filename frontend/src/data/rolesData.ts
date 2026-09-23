@@ -46,6 +46,7 @@ export interface RoleTheme {
 
 export interface RoleSkillItem {
   label: string;
+  labelEn?: string;
   icon: React.ElementType;
 }
 
@@ -55,7 +56,9 @@ export interface RoleItem {
   titleEn: string;
   subtitle?: string;
   description: string;
+  descriptionEn?: string;
   location: string;
+  locationEn?: string;
   jobs: string;
   jobsCount: number;
   growth: string;
@@ -73,7 +76,9 @@ export const TARGET_ROLES: RoleItem[] = [
     titleEn: 'Data Engineer',
     subtitle: '(Data Engineer)',
     description: 'بناء وتشغيل خطوط معالجة وتدفق البيانات الضخمة التي تعتمد عليها فرق التحليل والذكاء الاصطناعي.',
+    descriptionEn: 'Build and operate large-scale data pipelines and warehouses that empower analytics and AI teams.',
     location: 'القاهرة / عن بعد',
+    locationEn: 'Cairo / Remote',
     jobs: '1,247',
     jobsCount: 1247,
     growth: '+24%',
@@ -81,10 +86,10 @@ export const TARGET_ROLES: RoleItem[] = [
     hot: false,
     icon: Brain,
     skills: [
-      { label: 'بايثون و SQL', icon: Code2 },
-      { label: 'أنابيب معالجة ETL', icon: Cloud },
-      { label: 'حاويات دوكر و Airflow', icon: Settings },
-      { label: 'قواعد البيانات الكبيرة', icon: Database },
+      { label: 'بايثون و SQL', labelEn: 'Python & SQL', icon: Code2 },
+      { label: 'أنابيب معالجة ETL', labelEn: 'ETL Pipelines', icon: Cloud },
+      { label: 'حاويات دوكر و Airflow', labelEn: 'Docker & Airflow', icon: Settings },
+      { label: 'قواعد البيانات الكبيرة', labelEn: 'Big Data & Spark', icon: Database },
     ],
     theme: {
       iconFrom: '#38BDF8',
@@ -107,7 +112,9 @@ export const TARGET_ROLES: RoleItem[] = [
     titleEn: 'Full Stack Developer',
     subtitle: '(Full Stack Developer)',
     description: 'بناء تطبيقات ويب متكاملة وسريعة من الصفر بداية من واجهات React حتى خوادم Node.js وقواعد البيانات.',
+    descriptionEn: 'Build scalable, end-to-end web applications from reactive frontends to robust backends and databases.',
     location: 'القاهرة / عن بعد',
+    locationEn: 'Cairo / Remote',
     jobs: '1,950',
     jobsCount: 1950,
     growth: '+27%',
@@ -115,10 +122,10 @@ export const TARGET_ROLES: RoleItem[] = [
     hot: true,
     icon: Layers,
     skills: [
-      { label: 'React.js & Next.js', icon: Layout },
-      { label: 'Node.js & Express', icon: Server },
-      { label: 'TypeScript & SQL', icon: Code2 },
-      { label: 'نشر السحابة و Docker', icon: Cloud },
+      { label: 'React.js & Next.js', labelEn: 'React.js & Next.js', icon: Layout },
+      { label: 'Node.js & Express', labelEn: 'Node.js & Express', icon: Server },
+      { label: 'TypeScript & SQL', labelEn: 'TypeScript & SQL', icon: Code2 },
+      { label: 'نشر السحابة و Docker', labelEn: 'Cloud & Docker', icon: Cloud },
     ],
     theme: {
       iconFrom: '#818CF8',
@@ -141,7 +148,9 @@ export const TARGET_ROLES: RoleItem[] = [
     titleEn: 'Frontend Developer',
     subtitle: '(Frontend Developer)',
     description: 'تصميم وبناء واجهات مستخدم تفاعلية وعالية الاستجابة باستخدام React و Next.js و Tailwind CSS.',
+    descriptionEn: 'Design and build high-performance, responsive user interfaces with modern React, Next.js and Tailwind.',
     location: 'القاهرة / الإسكندرية',
+    locationEn: 'Cairo / Alex',
     jobs: '1,840',
     jobsCount: 1840,
     growth: '+22%',
@@ -149,10 +158,10 @@ export const TARGET_ROLES: RoleItem[] = [
     hot: false,
     icon: Layout,
     skills: [
-      { label: 'React.js & Next.js', icon: Layout },
-      { label: 'TypeScript & JavaScript', icon: Code2 },
-      { label: 'Tailwind CSS & UI/UX', icon: Palette },
-      { label: 'تحسين الأداء و SEO', icon: Zap },
+      { label: 'React.js & Next.js', labelEn: 'React.js & Next.js', icon: Layout },
+      { label: 'TypeScript & JavaScript', labelEn: 'TypeScript & JS', icon: Code2 },
+      { label: 'Tailwind CSS & UI/UX', labelEn: 'Tailwind & UI/UX', icon: Palette },
+      { label: 'تحسين الأداء و SEO', labelEn: 'Performance & SEO', icon: Zap },
     ],
     theme: {
       iconFrom: '#2DD4BF',
@@ -175,7 +184,9 @@ export const TARGET_ROLES: RoleItem[] = [
     titleEn: 'Backend Developer',
     subtitle: '(Backend Developer)',
     description: 'تصميم وبناء خوادم الويب وقواعد البيانات وواجهات البرمجة RESTful APIs و Microservices الآمنة.',
+    descriptionEn: 'Architect and scale robust backend services, RESTful APIs, relational databases, and microservices.',
     location: 'القاهرة / الجيزة',
+    locationEn: 'Cairo / Giza',
     jobs: '1,520',
     jobsCount: 1520,
     growth: '+25%',
@@ -183,10 +194,10 @@ export const TARGET_ROLES: RoleItem[] = [
     hot: false,
     icon: Server,
     skills: [
-      { label: 'Node.js & Python', icon: Terminal },
-      { label: 'PostgreSQL & MongoDB', icon: Database },
-      { label: 'REST APIs & GraphQL', icon: Globe },
-      { label: 'Docker & Caching Redis', icon: Cpu },
+      { label: 'Node.js & Python', labelEn: 'Node.js & Python', icon: Terminal },
+      { label: 'PostgreSQL & MongoDB', labelEn: 'PostgreSQL & NoSQL', icon: Database },
+      { label: 'REST APIs & GraphQL', labelEn: 'REST APIs & GraphQL', icon: Globe },
+      { label: 'Docker & Caching Redis', labelEn: 'Docker & Redis', icon: Cpu },
     ],
     theme: {
       iconFrom: '#F59E0B',
@@ -209,7 +220,9 @@ export const TARGET_ROLES: RoleItem[] = [
     titleEn: 'AI & ML Engineer',
     subtitle: '(AI & ML Engineer)',
     description: 'تطوير وتدريب نماذج تعلم الآلة والتعلم العميق وبناء تطبيقات الذكاء الاصطناعي التوليدي و LLMs.',
+    descriptionEn: 'Train machine learning & deep learning models and build cutting-edge generative AI & LLM solutions.',
     location: 'القاهرة / عن بعد',
+    locationEn: 'Cairo / Remote',
     jobs: '820',
     jobsCount: 820,
     growth: '+45%',
@@ -217,10 +230,10 @@ export const TARGET_ROLES: RoleItem[] = [
     hot: false,
     icon: Sparkles,
     skills: [
-      { label: 'بايثون و Scikit-Learn', icon: Code2 },
-      { label: 'التعلم العميق PyTorch', icon: Brain },
-      { label: 'الذكاء التوليدي و LLMs', icon: Sparkles },
-      { label: 'نشر النماذج و FastAPI', icon: Server },
+      { label: 'بايثون و Scikit-Learn', labelEn: 'Python & Scikit-Learn', icon: Code2 },
+      { label: 'التعلم العميق PyTorch', labelEn: 'PyTorch Deep Learning', icon: Brain },
+      { label: 'الذكاء التوليدي و LLMs', labelEn: 'Generative AI & LLMs', icon: Sparkles },
+      { label: 'نشر النماذج و FastAPI', labelEn: 'FastAPI Model Serving', icon: Server },
     ],
     theme: {
       iconFrom: '#C084FC',
@@ -243,7 +256,9 @@ export const TARGET_ROLES: RoleItem[] = [
     titleEn: 'BI Developer',
     subtitle: '(BI Developer)',
     description: 'تطوير لوحات التحكم والتقارير التفاعلية (Power BI) التي تتخذ الشركات قراراتها الاستراتيجية بناءً عليها.',
+    descriptionEn: 'Build executive BI dashboards and analytical data models that drive strategic business decisions.',
     location: 'القاهرة / الجيزة',
+    locationEn: 'Cairo / Giza',
     jobs: '934',
     jobsCount: 934,
     growth: '+18%',
@@ -251,10 +266,10 @@ export const TARGET_ROLES: RoleItem[] = [
     hot: false,
     icon: BarChart3,
     skills: [
-      { label: 'Power BI & DAX', icon: LayoutDashboard },
-      { label: 'قواعد بيانات SQL', icon: Database },
-      { label: 'تصميم التقارير والتابلوه', icon: FileBarChart },
-      { label: 'نمذجة البيانات التحليلية', icon: BarChart3 },
+      { label: 'Power BI & DAX', labelEn: 'Power BI & DAX', icon: LayoutDashboard },
+      { label: 'قواعد بيانات SQL', labelEn: 'SQL Databases', icon: Database },
+      { label: 'تصميم التقارير والتابلوه', labelEn: 'Tableau & Reporting', icon: FileBarChart },
+      { label: 'نمذجة البيانات التحليلية', labelEn: 'Data Modeling', icon: BarChart3 },
     ],
     theme: {
       iconFrom: '#A855F7',
@@ -277,7 +292,9 @@ export const TARGET_ROLES: RoleItem[] = [
     titleEn: 'Senior Data Analyst',
     subtitle: '(Senior Data Analyst)',
     description: 'قيادة التحليلات الإحصائية والتجارية المتقدمة واستخراج الأنماط لتوجيه مسار المنتجات والنمو المالي.',
+    descriptionEn: 'Lead statistical & commercial data analysis to uncover insights that drive product & revenue growth.',
     location: 'القاهرة / الإسكندرية',
+    locationEn: 'Cairo / Alex',
     jobs: '1,610',
     jobsCount: 1610,
     growth: '+15%',
@@ -285,10 +302,10 @@ export const TARGET_ROLES: RoleItem[] = [
     hot: false,
     icon: Users,
     skills: [
-      { label: 'الإحصاء و A/B Testing', icon: Sigma },
-      { label: 'تحليل الأعمال بـ Python', icon: TrendingUp },
-      { label: 'نمذجة البيانات و SQL', icon: Network },
-      { label: 'التنبؤ المالي و Power BI', icon: LineChart },
+      { label: 'الإحصاء و A/B Testing', labelEn: 'Statistics & A/B Testing', icon: Sigma },
+      { label: 'تحليل الأعمال بـ Python', labelEn: 'Python Business Analytics', icon: TrendingUp },
+      { label: 'نمذجة البيانات و SQL', labelEn: 'SQL & Data Modeling', icon: Network },
+      { label: 'التنبؤ المالي و Power BI', labelEn: 'Power BI & Forecasting', icon: LineChart },
     ],
     theme: {
       iconFrom: '#FB7185',
@@ -311,7 +328,9 @@ export const TARGET_ROLES: RoleItem[] = [
     titleEn: 'Flutter Developer',
     subtitle: '(Flutter Developer)',
     description: 'تطوير تطبيقات هواتف ذكية لنظامي Android و iOS بكود برمجي موحد وعالي الأداء باستخدام Flutter.',
+    descriptionEn: 'Develop high-performance, cross-platform mobile apps for iOS and Android with Flutter & Dart.',
     location: 'القاهرة / عن بعد',
+    locationEn: 'Cairo / Remote',
     jobs: '910',
     jobsCount: 910,
     growth: '+20%',
@@ -319,10 +338,10 @@ export const TARGET_ROLES: RoleItem[] = [
     hot: false,
     icon: Smartphone,
     skills: [
-      { label: 'Flutter & Dart', icon: Smartphone },
-      { label: 'State Management (Bloc/Riverpod)', icon: Cpu },
-      { label: 'ربط واجهات REST & Firebase', icon: Globe },
-      { label: 'تصميم واجهات الموبايل الحديثة', icon: Palette },
+      { label: 'Flutter & Dart', labelEn: 'Flutter & Dart', icon: Smartphone },
+      { label: 'State Management (Bloc/Riverpod)', labelEn: 'State Management', icon: Cpu },
+      { label: 'ربط واجهات REST & Firebase', labelEn: 'REST APIs & Firebase', icon: Globe },
+      { label: 'تصميم واجهات الموبايل الحديثة', labelEn: 'Modern Mobile UI/UX', icon: Palette },
     ],
     theme: {
       iconFrom: '#38BDF8',

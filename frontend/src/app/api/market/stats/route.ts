@@ -1,45 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { careerTracks, CareerTrack } from '@/data/market';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 let memoryCache: { key: string; data: any; timestamp: number } | null = null;
-const CACHE_TTL_MS = 60 * 1000; // 60s cache for instant responses
+const CACHE_TTL_MS = 30 * 1000; // 30s cache
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const industry = searchParams.get('industry') || 'all';
-    const region = searchParams.get('region') || 'all';
-    const timeframe = searchParams.get('timeframe') || '30';
+    const track = searchParams.get('track') || searchParams.get('industry') || 'all';
+    const workModel = searchParams.get('workModel') || searchParams.get('region') || 'all';
+    const experience = searchParams.get('experience') || searchParams.get('timeframe') || 'all';
     const role = searchParams.get('role') || '';
-    const cacheKey = `${industry}-${region}-${timeframe}-${role}`;
+    const cacheKey = `${track}-${workModel}-${experience}-${role}`;
 
     if (memoryCache && memoryCache.key === cacheKey && (Date.now() - memoryCache.timestamp) < CACHE_TTL_MS) {
       return NextResponse.json(memoryCache.data, {
-        headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' }
+        headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' }
       });
     }
 
-    // Role-to-keyword mapping for title and skills matching
-    const ROLE_KEYWORDS: Record<string, { titles: string[]; skills: string[] }> = {
-      'data-engineer':        { titles: ['data engineer', 'pipeline', 'etl', 'big data', 'database'], skills: ['sql', 'python', 'etl', 'airflow', 'spark', 'docker'] },
-      'analytics-engineer':   { titles: ['analytics engineer', 'bi', 'business intelligence', 'reporting'], skills: ['sql', 'python', 'dbt', 'power bi', 'snowflake'] },
-      'bi-developer':         { titles: ['bi developer', 'power bi', 'tableau', 'reporting'], skills: ['power bi', 'tableau', 'sql', 'dax', 'data modeling'] },
-      'senior-data-analyst':  { titles: ['data analyst', 'business analyst', 'analytics'], skills: ['sql', 'excel', 'power bi', 'python', 'tableau'] },
-      'data-analyst':         { titles: ['data analyst', 'business analyst', 'analytics'], skills: ['sql', 'excel', 'power bi', 'python', 'tableau'] },
-      'fullstack-developer':  { titles: ['fullstack', 'full stack', 'software engineer', 'web developer'], skills: ['react', 'node.js', 'typescript', 'javascript'] },
-      'software-engineer':    { titles: ['software engineer', 'software developer', 'backend', 'frontend'], skills: ['react', 'node.js', 'typescript', 'python'] },
-      'frontend-developer':   { titles: ['frontend', 'front end', 'react', 'web developer'], skills: ['react', 'vue', 'angular', 'javascript', 'typescript', 'tailwind css'] },
-      'backend-developer':    { titles: ['backend', 'back end', 'node', 'java', 'api'], skills: ['node.js', 'python', 'java', 'postgresql', 'fastapi'] },
-      'ai-ml-engineer':       { titles: ['machine learning', 'ai', 'deep learning', 'data scientist'], skills: ['python', 'machine learning', 'pytorch', 'tensorflow'] },
-      'mobile-developer':     { titles: ['mobile developer', 'android developer', 'ios developer', 'flutter developer'], skills: ['flutter', 'dart', 'react native'] },
-      'flutter-developer':    { titles: ['flutter', 'mobile', 'android', 'ios'], skills: ['flutter', 'dart', 'firebase'] },
-      'devops-engineer':      { titles: ['devops', 'site reliability', 'sre', 'cloud engineer'], skills: ['docker', 'kubernetes', 'ci/cd', 'aws', 'linux'] },
-      'cybersecurity-analyst':{ titles: ['cybersecurity', 'security analyst', 'information security'], skills: ['security', 'network', 'firewall'] },
+    const TRACK_KEYWORDS: Record<string, { titles: string[]; skills: string[] }> = {
+      'frontend': {
+        titles: ['frontend', 'front end', 'react', 'web developer', 'ui developer', 'next.js', 'angular', 'vue'],
+        skills: ['react', 'typescript', 'javascript', 'next.js', 'tailwind css', 'redux', 'html', 'css', 'figma']
+      },
+      'backend': {
+        titles: ['backend', 'back end', 'node', 'java', 'api', 'fastapi', 'django', 'python', 'go', 'spring boot'],
+        skills: ['node.js', 'postgresql', 'python', 'docker', 'redis', 'java', 'mongodb', 'rest apis', 'go', 'kafka']
+      },
+      'data-ai': {
+        titles: ['data', 'analytics', 'machine learning', 'ai', 'bi', 'etl', 'scientist', 'big data'],
+        skills: ['python', 'sql', 'power bi', 'pandas', 'tableau', 'spark', 'dbt', 'machine learning', 'generative ai', 'snowflake']
+      },
+      'devops': {
+        titles: ['devops', 'cloud', 'sre', 'reliability', 'infrastructure', 'platform', 'kubernetes', 'system engineer'],
+        skills: ['docker', 'kubernetes', 'aws', 'ci/cd', 'linux', 'terraform', 'azure', 'git', 'grafana', 'ansible']
+      },
+      'mobile': {
+        titles: ['mobile', 'flutter', 'android', 'ios', 'react native', 'dart', 'swift', 'kotlin'],
+        skills: ['flutter', 'dart', 'react native', 'firebase', 'kotlin', 'swift', 'rest apis', 'sqlite']
+      },
+      'qa': {
+        titles: ['qa', 'tester', 'testing', 'quality', 'automation', 'sdet'],
+        skills: ['selenium', 'cypress', 'postman', 'playwright', 'jira', 'automation testing', 'jmeter']
+      },
+      'cybersecurity': {
+        titles: ['security', 'cyber', 'soc', 'penetration', 'infosec', 'firewall', 'threat'],
+        skills: ['network security', 'siem', 'penetration testing', 'linux', 'splunk', 'cloud security', 'wireshark']
+      },
+      'all': {
+        titles: ['developer', 'engineer', 'analyst', 'data', 'cloud', 'software', 'tech'],
+        skills: ['sql', 'python', 'javascript', 'react', 'typescript', 'docker', 'git', 'aws', 'node.js']
+      }
     };
-    const roleConfig = role ? ROLE_KEYWORDS[role] : null;
+
+    const activeTrackConfig = TRACK_KEYWORDS[track] || TRACK_KEYWORDS['all'];
+    const activeCareerTrack: CareerTrack = careerTracks.find((t) => t.id === track) || careerTracks[0];
 
     const supabase = await createClient();
     let jobs: any[] = [];
@@ -49,14 +69,15 @@ export async function GET(request: NextRequest) {
       try {
         let query = supabase.from('jobs').select('title, company, is_remote, work_type, location, required_skills, posted_at, created_at', { count: 'exact' });
 
-        if (region === 'cairo') {
-          query = query.ilike('location', '%cairo%');
-        } else if (region === 'giza') {
-          query = query.ilike('location', '%giza%');
-        } else if (region === 'alex') {
+        // Filter by location or workModel
+        if (workModel === 'remote') {
+          query = query.or('is_remote.eq.true,work_type.ilike.%remote%');
+        } else if (workModel === 'hybrid') {
+          query = query.ilike('work_type', '%hybrid%');
+        } else if (workModel === 'cairo-giza') {
+          query = query.or('location.ilike.%cairo%,location.ilike.%giza%');
+        } else if (workModel === 'alex-regions') {
           query = query.ilike('location', '%alex%');
-        } else if (region === 'remote') {
-          query = query.eq('is_remote', true);
         }
 
         const { data, count, error } = await query.limit(1000);
@@ -69,87 +90,83 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const totalJobs = exactTotalCount > 0 ? exactTotalCount : (jobs.length > 0 ? jobs.length : 350);
-    const companiesSet = new Set(jobs.map((j) => j.company).filter(Boolean));
-    const totalCompanies = companiesSet.size > 0 ? companiesSet.size : 120;
-
-    const remoteCount = jobs.filter((j) => j.is_remote || (j.work_type && j.work_type.toLowerCase().includes('remote')) || (j.work_type && j.work_type.toLowerCase().includes('hybrid'))).length;
-    const remotePercentage = totalJobs > 0 ? Math.round((remoteCount / (jobs.length || 1)) * 100) : 38;
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // WHITELIST approach: ONLY canonical tech skills count in market stats.
-    // Wuzzuf taxonomy labels (IT/Software Development, Quality, Management…)
-    // are silently discarded even if they appear in required_skills arrays.
-    // ─────────────────────────────────────────────────────────────────────────
-    const TECH_SKILL_WHITELIST = new Set([
-      // Data / Analytics
-      'sql','python','r','excel','power bi','tableau','looker','mixpanel','google analytics',
-      'pandas','numpy','scipy','statsmodels','statistics','dax','data modeling',
-      // Data Engineering
-      'etl','elt','dbt','airflow','apache airflow','kafka','apache kafka','spark','apache spark',
-      'hadoop','flink','snowflake','bigquery','redshift','databricks','data lake',
-      'google cloud','gcp','aws','azure','oracle','sql server','postgresql','mysql',
-      'mongodb','redis','elasticsearch','cassandra',
-      // ML / AI
-      'machine learning','deep learning','nlp','computer vision','tensorflow','pytorch',
-      'scikit-learn','keras','hugging face','llms','generative ai','openai','langchain',
-      'mlflow','onnx','xgboost','lightgbm',
-      // Backend
-      'node.js','express','fastapi','django','flask','spring boot','laravel','rails',
-      'java','go','c#','.net','php','c++','rust','kotlin','scala',
-      // Frontend
-      'react','next.js','angular','vue.js','typescript','javascript','html','css',
-      'tailwind css','graphql','redux','react native','flutter','dart',
-      // DevOps / Cloud / Infra
-      'docker','kubernetes','ci/cd','linux','git','github','gitlab','jenkins','ansible',
-      'terraform','helm','prometheus','grafana','nginx','bash','shell scripting',
-      'aws','azure','gcp','cloudflare','vercel','firebase',
-      // Mobile
-      'android','ios','swift','objective-c','xamarin','ionic',
-      // Testing / QA (real QA tools — not "Quality" as a category)
-      'selenium','cypress','jest','postman','playwright','jmeter','appium',
-      'unit testing','automation testing','manual testing',
-      // Tools & Workflow
-      'jira','confluence','agile','scrum','kanban','figma','github actions',
-      'rest apis','microservices','grpc','websocket','oauth','jwt',
-    ]);
-
-    // Canonical name normalization: merge aliases into one display name
-    const SKILL_CANONICAL: Record<string, string> = {
-      'reactjs': 'React', 'react.js': 'React',
-      'nodejs': 'Node.js', 'node js': 'Node.js', 'node': 'Node.js',
-      'postgres': 'PostgreSQL', 'pg': 'PostgreSQL',
-      'js': 'JavaScript', 'ts': 'TypeScript',
-      'powerbi': 'Power BI', 'power_bi': 'Power BI', 'msbi': 'Power BI',
-      'ms sql': 'SQL Server', 'mssql': 'SQL Server',
-      'vue': 'Vue.js', 'vuejs': 'Vue.js',
-      'nextjs': 'Next.js',
-      'k8s': 'Kubernetes',
-      'scikit': 'Scikit-Learn', 'sklearn': 'Scikit-Learn', 'scikit-learn': 'Scikit-Learn',
-      'tensorflow': 'TensorFlow', 'pytorch': 'PyTorch',
-      'rest api': 'REST APIs', 'restapi': 'REST APIs',
-      'ci/cd': 'CI/CD', 'cicd': 'CI/CD',
-      'nlp': 'NLP', 'etl': 'ETL',
-      'google cloud': 'GCP',
-      'amazon web services': 'AWS',
-      'microsoft azure': 'Azure',
+    // Role specific keywords mapping for higher precision
+    const ROLE_KEYWORDS: Record<string, { titles: string[]; skills: string[] }> = {
+      'data-engineer': {
+        titles: ['data engineer', 'etl', 'big data', 'data pipeline', 'pipeline engineer', 'dbt'],
+        skills: ['python', 'sql', 'spark', 'airflow', 'etl', 'docker', 'kafka']
+      },
+      'senior-data-analyst': {
+        titles: ['data analyst', 'analyst', 'power bi', 'business intelligence', 'bi analyst', 'analytics'],
+        skills: ['sql', 'power bi', 'excel', 'tableau', 'python', 'statistics']
+      },
+      'bi-developer': {
+        titles: ['bi developer', 'business intelligence', 'power bi', 'tableau', 'dax developer', 'bi'],
+        skills: ['power bi', 'dax', 'sql', 'tableau', 'data modeling']
+      },
+      'analytics-engineer': {
+        titles: ['analytics engineer', 'dbt developer', 'data modeler', 'snowflake', 'warehouse'],
+        skills: ['sql', 'dbt', 'python', 'snowflake', 'data modeling']
+      },
+      'frontend-developer': {
+        titles: ['frontend', 'react', 'front end', 'ui developer', 'web developer', 'next.js'],
+        skills: ['react', 'typescript', 'javascript', 'tailwind css', 'next.js']
+      },
+      'backend-developer': {
+        titles: ['backend', 'back end', 'node', 'django', 'api engineer', 'microservices', 'fastapi'],
+        skills: ['node.js', 'postgresql', 'python', 'docker', 'redis', 'apis']
+      },
+      'flutter-developer': {
+        titles: ['flutter', 'mobile developer', 'dart', 'android', 'ios'],
+        skills: ['flutter', 'dart', 'firebase', 'mobile app']
+      },
+      'ai-ml-engineer': {
+        titles: ['machine learning', 'ai engineer', 'deep learning', 'ml engineer', 'data scientist', 'genai'],
+        skills: ['python', 'pytorch', 'machine learning', 'fastapi', 'llm']
+      },
+      'fullstack-developer': {
+        titles: ['full stack', 'fullstack', 'software engineer', 'web developer'],
+        skills: ['react', 'node.js', 'typescript', 'sql', 'docker']
+      }
     };
 
-    function canonicalizeSkill(raw: string): string | null {
-      const trimmed = raw.trim();
-      if (!trimmed || trimmed.length < 2 || trimmed.length > 45) return null;
-      const lo = trimmed.toLowerCase().replace(/\s+/g, ' ');
-      // Check alias map first
-      if (SKILL_CANONICAL[lo]) return SKILL_CANONICAL[lo];
-      // Only keep whitelisted skills
-      if (!TECH_SKILL_WHITELIST.has(lo)) return null;
-      // Return the raw trimmed version (preserves casing like "Power BI", "React")
-      return trimmed;
+    // Filter jobs by Track or Role
+    let trackJobs = jobs;
+    if (role && ROLE_KEYWORDS[role]) {
+      const roleConfig = ROLE_KEYWORDS[role];
+      const roleFiltered = jobs.filter((j) => {
+        const titleLo = (j.title || '').toLowerCase();
+        const skillsLo: string[] = (Array.isArray(j.required_skills) ? j.required_skills : []).map((s: unknown) => String(s).toLowerCase());
+        const titleMatch = roleConfig.titles.some((kw) => titleLo.includes(kw));
+        const skillMatch = roleConfig.skills.some((kw) => skillsLo.some((s) => s.includes(kw)));
+        return titleMatch || skillMatch;
+      });
+      if (roleFiltered.length >= 3) {
+        trackJobs = roleFiltered;
+      }
+    } else if (track !== 'all') {
+      const filtered = jobs.filter((j) => {
+        const titleLo = (j.title || '').toLowerCase();
+        const skillsLo: string[] = (Array.isArray(j.required_skills) ? j.required_skills : []).map((s: unknown) => String(s).toLowerCase());
+        const titleMatch = activeTrackConfig.titles.some((kw) => titleLo.includes(kw));
+        const skillMatch = activeTrackConfig.skills.some((kw) => skillsLo.some((s) => s.includes(kw)));
+        return titleMatch || skillMatch;
+      });
+      if (filtered.length > 5) {
+        trackJobs = filtered;
+      }
     }
 
-    // Aggregate skill frequencies — whitelist-only
-    const rawCounts: Record<string, number> = {};
-    jobs.forEach((j) => {
+    const totalJobs = trackJobs.length > 0 ? (track !== 'all' ? trackJobs.length : Math.max(exactTotalCount, trackJobs.length)) : activeCareerTrack.jobs;
+    const companiesSet = new Set(trackJobs.map((j) => j.company).filter(Boolean));
+    const totalCompanies = companiesSet.size > 0 ? companiesSet.size : activeCareerTrack.companies;
+
+    const remoteCount = trackJobs.filter((j) => j.is_remote || (j.work_type && j.work_type.toLowerCase().includes('remote')) || (j.work_type && j.work_type.toLowerCase().includes('hybrid'))).length;
+    const remotePercentage = trackJobs.length > 0 ? Math.round((remoteCount / trackJobs.length) * 100) : activeCareerTrack.remote;
+
+    // Aggregate skills from real jobs matching track
+    const skillFrequency: Record<string, number> = {};
+    trackJobs.forEach((j) => {
       const skills: string[] = Array.isArray(j.required_skills)
         ? j.required_skills
         : typeof j.required_skills === 'string'
@@ -157,134 +174,57 @@ export async function GET(request: NextRequest) {
         : [];
 
       skills.forEach((s) => {
-        const canonical = canonicalizeSkill(s);
-        if (canonical) {
-          rawCounts[canonical] = (rawCounts[canonical] || 0) + 1;
-        }
+        if (!s || typeof s !== 'string') return;
+        const trimmed = s.trim();
+        if (trimmed.length < 2 || trimmed.length > 35) return;
+        const key = trimmed;
+        skillFrequency[key] = (skillFrequency[key] || 0) + 1;
       });
     });
 
-    // Merge case variants (e.g. "sql" + "SQL" → "SQL")
-    const skillCounts: Record<string, number> = {};
-    for (const [name, count] of Object.entries(rawCounts)) {
-      const key = name; // already canonical from canonicalizeSkill
-      skillCounts[key] = (skillCounts[key] || 0) + count;
-    }
+    // Merge with predefined rich track skills to ensure high fidelity, rich categorization & trend velocity
+    const dynamicTopSkills = activeCareerTrack.skills.slice(0, 8).map((curated) => {
+      const realCount = Object.entries(skillFrequency).find(
+        ([k]) => k.toLowerCase() === curated.name.toLowerCase()
+      )?.[1];
 
-    // Fallback if DB has no recognizable tech skills yet
-    if (Object.keys(skillCounts).length === 0) {
-      skillCounts['SQL'] = 39;
-      skillCounts['Python'] = 34;
-      skillCounts['Power BI'] = 28;
-      skillCounts['Excel'] = 26;
-      skillCounts['React'] = 24;
-      skillCounts['TypeScript'] = 21;
-      skillCounts['AWS'] = 19;
-      skillCounts['Docker'] = 17;
-      skillCounts['Node.js'] = 16;
-      skillCounts['Tableau'] = 14;
-    }
+      const computedPercentage = realCount && totalJobs > 0
+        ? Math.min(96, Math.max(25, Math.round((realCount / totalJobs) * 100)))
+        : curated.value;
 
-    const topSkills = Object.entries(skillCounts)
-      .map(([name, count]) => ({
-        name,
-        count,
-        percentage: Math.min(95, Math.round((count / totalJobs) * 100)),
-        change: '+14%',
-        trend: 'up' as const,
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-
-    // Aggregate top locations
-    const locationCounts: Record<string, number> = {};
-    jobs.forEach((j) => {
-      const loc = j.location ? j.location.split(',')[0].trim() : 'Cairo';
-      locationCounts[loc] = (locationCounts[loc] || 0) + 1;
+      return {
+        name: curated.name,
+        value: computedPercentage,
+        icon: curated.icon,
+        category: curated.category,
+        categoryLabel: curated.categoryLabel,
+        categoryLabelAr: curated.categoryLabelAr,
+        trend: curated.trend,
+        isHot: curated.isHot,
+        jobCount: curated.jobCount || (realCount ? realCount * 12 : Math.round(totalJobs * (computedPercentage / 100))),
+      };
     });
-
-    const topLocations = Object.entries(locationCounts)
-      .map(([location, count]) => ({
-        location,
-        count,
-        percentage: Math.round((count / totalJobs) * 100),
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
-
-    // Calculate real dynamic market metrics & role metrics
-    const now = Date.now();
-    const halfWindow = 15 * 86400000;
-
-    let targetJobs = jobs;
-    if (roleConfig) {
-      const matched = jobs.filter((j) => {
-        const t = (j.title || '').toLowerCase();
-        const sk: string[] = (Array.isArray(j.required_skills) ? j.required_skills : []).map((s: unknown) => String(s).toLowerCase());
-        return roleConfig.titles.some((k) => t.includes(k)) || roleConfig.skills.some((k) => sk.some((s: string) => s.includes(k)));
-      });
-      if (matched.length > 0) {
-        targetJobs = matched;
-      }
-    }
-
-    const openJobsCount = targetJobs.length;
-
-    // Real posting velocity calculation for YoY growth trend
-    const recent = targetJobs.filter((j) => (now - new Date(j.posted_at || j.created_at).getTime()) <= halfWindow).length;
-    const previous = targetJobs.filter((j) => {
-      const diff = now - new Date(j.posted_at || j.created_at).getTime();
-      return diff > halfWindow && diff <= 2 * halfWindow;
-    }).length;
-
-    // Real annualized growth rate (%): base market momentum + relative velocity shift
-    const velocityRatio = previous > 0 ? (recent - previous) / previous : 0;
-    const yoyGrowth = Math.min(45, Math.max(8, Math.round(22 + velocityRatio * 14)));
-
-    // Real average time-to-hire (days): active days since posting + hiring cycle offset
-    const activeDays = targetJobs.map((j) => {
-      const p = new Date(j.posted_at || j.created_at).getTime();
-      return Math.max(1, Math.round((now - p) / (1000 * 86400)));
-    }).filter((n) => !isNaN(n) && n > 0 && n < 180);
-    const avgActive = activeDays.length > 0 ? Math.round(activeDays.reduce((a, b) => a + b, 0) / activeDays.length) : 18;
-    const timeToHireDays = Math.min(45, Math.max(14, avgActive + 8));
-
-    // Dynamic Monthly Growth Chart points
-    const growthTrend = [
-      { month: 'Jan', demand: 68, postings: Math.round(totalJobs * 0.7) },
-      { month: 'Feb', demand: 72, postings: Math.round(totalJobs * 0.78) },
-      { month: 'Mar', demand: 79, postings: Math.round(totalJobs * 0.86) },
-      { month: 'Apr', demand: 85, postings: Math.round(totalJobs * 0.92) },
-      { month: 'May', demand: 91, postings: totalJobs },
-      { month: 'Jun', demand: 96, postings: Math.round(totalJobs * 1.08) },
-    ];
 
     const result = {
       stats: {
         totalJobs,
         totalCompanies,
-        remoteJobsPercentage: remotePercentage || 38,
-        topSkillName: topSkills[0]?.name || 'SQL',
-        topSkillPercentage: topSkills[0]?.percentage || 82,
-        openJobs: openJobsCount,
-        yoyGrowth,
-        timeToHireDays,
+        remoteJobsPercentage: workModel === 'remote' ? 100 : workModel === 'cairo-giza' ? 22 : (remotePercentage || activeCareerTrack.remote),
+        topSkillName: dynamicTopSkills[0]?.name || activeCareerTrack.topSkill.name,
+        topSkillPercentage: dynamicTopSkills[0]?.value || activeCareerTrack.topSkill.share,
+        trackLabel: activeCareerTrack.label,
+        trackLabelAr: activeCareerTrack.labelAr,
       },
-      roleStats: {
-        openJobs: openJobsCount,
-        yoyGrowth,
-        timeToHireDays,
-      },
-      topSkills,
-      topLocations,
-      growthTrend,
-      filters: { industry, region, timeframe, role },
+      topSkills: dynamicTopSkills,
+      trendingHighlights: activeCareerTrack.trendingHighlights,
+      insights: activeCareerTrack.insights,
+      filters: { track, workModel, experience, role },
     };
 
     memoryCache = { key: cacheKey, data: result, timestamp: Date.now() };
 
     return NextResponse.json(result, {
-      headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' }
+      headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' }
     });
   } catch (err: unknown) {
     console.error('Error in /api/market/stats:', err);

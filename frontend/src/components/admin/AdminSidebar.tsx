@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
+  FileCheck2,
   BookOpen,
   Settings,
   FileText,
@@ -43,16 +44,16 @@ const NAV_ITEMS: NavItem[] = [
     icon: Users,
   },
   {
+    label: 'CV Documents',
+    labelAr: 'ملفات السير الذاتية',
+    href: '/admin/cvs',
+    icon: FileCheck2,
+  },
+  {
     label: 'Resources',
     labelAr: 'المصادر التعليمية',
     href: '/admin/resources',
     icon: BookOpen,
-  },
-  {
-    label: 'Analytics',
-    labelAr: 'التحليلات',
-    href: '/admin/analytics',
-    icon: BarChart3,
   },
   {
     label: 'Audit Logs',

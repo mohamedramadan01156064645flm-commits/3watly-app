@@ -26,6 +26,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { inferNavigationButtons } from '@/lib/copilot/navigation';
 import { RichText } from './RichText';
 import { RoadmapCard } from './RoadmapCard';
+import { PremiumSkillPlanModal } from '../skills/PremiumSkillPlanModal';
 
 type ChatThreadProps = {
   messages: ChatMessage[];
@@ -142,6 +143,8 @@ function AssistantCard({
   const navigation = message.navigation || [];
   const followUps = message.followUps || [];
 
+  const [showPlanModal, setShowPlanModal] = useState(false);
+
   // Intelligently ensure navigation buttons are ALWAYS present on every assistant message
   const effectiveNavigation = (navigation && navigation.length > 0)
     ? navigation
@@ -213,11 +216,29 @@ function AssistantCard({
           <div className="pt-2">
             <div className="flex flex-wrap items-center gap-2.5">
               {effectiveNavigation.map((nav, idx) => (
-                <NavigationButton key={idx} item={nav} />
+                <NavigationButton
+                  key={idx}
+                  item={nav}
+                  onOpenPlan={() => setShowPlanModal(true)}
+                />
               ))}
             </div>
           </div>
         )}
+
+        {/* Premium Full Plan Modal */}
+        <PremiumSkillPlanModal
+          open={showPlanModal}
+          onClose={() => setShowPlanModal(false)}
+          onConsultCopilot={() => {
+            setShowPlanModal(false);
+            onSendMessage?.(
+              isAr
+                ? 'اشرح لي تفاصيل خطة المهارات وكيف أبدأ في الأسبوع الأول بالتفصيل'
+                : 'Explain the details of Week 1 in my skill plan'
+            );
+          }}
+        />
 
         {/* Suggested Follow-up Questions */}
         {followUps.length > 0 && onSendMessage && (
@@ -279,7 +300,13 @@ function AssistantCard({
   );
 }
 
-function NavigationButton({ item }: { item: ChatNavigationItem }) {
+function NavigationButton({
+  item,
+  onOpenPlan,
+}: {
+  item: ChatNavigationItem;
+  onOpenPlan?: () => void;
+}) {
   const router = useRouter();
 
   const getIcon = () => {
@@ -305,10 +332,27 @@ function NavigationButton({ item }: { item: ChatNavigationItem }) {
 
   const isPrimary = item.priority !== 'secondary';
 
+  const handleClick = () => {
+    const isPlanAction =
+      item.path === '/skill-plan' ||
+      item.path === '/skills' ||
+      item.label.includes('خطة') ||
+      item.label.includes('Plan') ||
+      item.label.includes('خارطة') ||
+      item.label.includes('Roadmap');
+
+    if (isPlanAction && onOpenPlan) {
+      onOpenPlan();
+      return;
+    }
+
+    router.push(item.path);
+  };
+
   return (
     <button
       type="button"
-      onClick={() => router.push(item.path)}
+      onClick={handleClick}
       className={`group inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[13px] font-semibold transition-all cursor-pointer shadow-xs ${
         isPrimary
           ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20 hover:shadow-md'

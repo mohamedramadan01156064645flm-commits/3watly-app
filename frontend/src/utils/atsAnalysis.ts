@@ -516,17 +516,6 @@ export function analyzeCV(cv: CVData, template: TemplateId): Analysis {
     });
   }
 
-  // Fix: too few total skills
-  if (totalSkills(cv) < 8) {
-    fixes.push({
-      id: 'few-skills',
-      title: 'Add more technical skills',
-      titleAr: 'إضافة مهارات تقنية إضافية',
-      why: 'CVs with 8+ skills are shortlisted 3× more often in the Egyptian market.',
-      whyAr: 'السيرات التي تحتوي على 8 مهارات أو أكثر تُرشَّح 3 أضعاف في سوق العمل المصري.',
-    });
-  }
-
   // Fix: missing keywords (top 3 per role)
   if (missing.length > 0) {
     const next = missing.slice(0, 3);

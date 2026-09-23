@@ -93,6 +93,24 @@ export default function CopilotPage() {
     cvName?: string;
   }>({ hasCv: false, skillsCount: 0 });
 
+  // Auto-send query passed via URL parameter (e.g. from Dashboard AI card)
+  const promptHandledRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || promptHandledRef.current) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const queryPrompt = params.get('prompt');
+      if (queryPrompt && queryPrompt.trim()) {
+        promptHandledRef.current = true;
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+        setTimeout(() => {
+          sendMessage(queryPrompt.trim());
+        }, 200);
+      }
+    } catch {}
+  }, [sendMessage]);
+
   useEffect(() => {
     // 1. Try from activeVersion in CVContext
     if (activeVersion && (activeVersion.cvData?.skills?.length || activeVersion.cvData?.experience?.length || activeVersion.name)) {

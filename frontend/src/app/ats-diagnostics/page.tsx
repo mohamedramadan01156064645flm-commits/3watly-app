@@ -10,7 +10,6 @@ import { ScoreOverview } from "@/components/ats/ScoreOverview";
 import { StructureCard } from "@/components/ats/StructureCard";
 import { ParserCard } from "@/components/ats/ParserCard";
 import { KeywordCard } from "@/components/ats/KeywordCard";
-import { FixesCard } from "@/components/ats/FixesCard";
 import { ActiveCVBadge } from "@/components/cv/CVVersionManager";
 import { AppShell } from "@/components/layout/AppShell";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -143,15 +142,15 @@ export default function ATSDiagnosticsPage() {
     }
   }, [analysis.score, isAr]);
 
-  const handleDownloadReport = () => {
+  const handleDownloadReport = async () => {
     try {
       setDownloading(true);
-      toast.success(
+      toast.info(
         isAr
-          ? "جاري إنشاء وتحميل تقرير الـ ATS بصيغة PDF..."
-          : "Generating and downloading your ATS Diagnostic Report PDF..."
+          ? "اختر 'حفظ بتنسيق PDF' (Save as PDF) لحفظ التقرير كصفحة واحدة بنصوص حقيقية 100% قابلة للتحديد والنسخ."
+          : "Choose 'Save as PDF' to save your 1-page report with 100% real selectable text."
       );
-      downloadAtsDiagnosticPdf(analysis, cv, isAr);
+      await downloadAtsDiagnosticPdf(analysis, cv, isAr);
     } catch (err) {
       console.error("Failed to download ATS report:", err);
       toast.error(isAr ? "فشل إنشاء تقرير الـ PDF" : "Failed to generate PDF report");
@@ -255,9 +254,6 @@ export default function ATSDiagnosticsPage() {
           <ParserCard analysis={analysis} />
           <KeywordCard analysis={analysis} />
         </div>
-
-        {/* Actionable Fixes */}
-        <FixesCard analysis={analysis} onApply={applyFix} />
       </div>
     </AppShell>
   );

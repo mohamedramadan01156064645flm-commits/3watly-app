@@ -87,17 +87,17 @@ export function StatCards({ stats, onSelect }: StatCardsProps) {
               <span className="block text-[11.5px] sm:text-[12px] xl:text-[13px] font-medium text-slate-500 dark:text-slate-400 truncate">
                 {card.label}
               </span>
-              <p className={`${card.id === 'skill' ? 'text-[14.5px] sm:text-[16px] xl:text-[19px] 2xl:text-[22px] leading-[1.2] break-words line-clamp-2' : 'text-[20px] sm:text-[22px] xl:text-[26px] leading-tight truncate'} font-black text-[#0B132B] dark:text-white mt-0.5 tracking-tight`}>
+              <p suppressHydrationWarning className={`${card.id === 'skill' ? 'text-[14.5px] sm:text-[16px] xl:text-[19px] 2xl:text-[22px] leading-[1.2] break-words line-clamp-2' : 'text-[20px] sm:text-[22px] xl:text-[26px] leading-tight truncate'} font-black text-[#0B132B] dark:text-white mt-0.5 tracking-tight`}>
                 {card.value}
               </p>
-              <div className="mt-0.5 sm:mt-1 flex items-center gap-1 text-[11px] sm:text-[11.5px] xl:text-[12px] font-bold text-[#12B76A] truncate">
+              <div suppressHydrationWarning className="mt-0.5 sm:mt-1 flex items-center gap-1 text-[11px] sm:text-[11.5px] xl:text-[12px] font-bold text-[#12B76A] truncate">
                 {card.delta && (
-                  <span className="flex items-center gap-0.5 shrink-0">
+                  <span suppressHydrationWarning className="flex items-center gap-0.5 shrink-0">
                     <ArrowUp className="w-3 h-3 stroke-[3]" />
                     {card.delta}
                   </span>
                 )}
-                <span className="font-normal text-slate-400 dark:text-slate-500 text-[10.5px] sm:text-[11px] truncate">
+                <span suppressHydrationWarning className="font-normal text-slate-400 dark:text-slate-500 text-[10.5px] sm:text-[11px] truncate">
                   {card.sub}
                 </span>
               </div>

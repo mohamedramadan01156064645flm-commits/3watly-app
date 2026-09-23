@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Inter, Cairo } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 import { AppProviders } from "@/components/providers/AppProviders";
 
@@ -35,22 +34,6 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" className={`dark ${inter.variable} ${cairo.variable}`} suppressHydrationWarning>
       <head>
-        <Script
-          id="theme-initializer"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              try {
-                const t = localStorage.getItem('majra-theme');
-                if (t === 'light') {
-                  document.documentElement.classList.remove('dark');
-                } else if (t === 'dark') {
-                  document.documentElement.classList.add('dark');
-                }
-              } catch(e) {}
-            `,
-          }}
-        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* Preload Primary Hero Background Artwork for instant LCP render */}

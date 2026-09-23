@@ -3,19 +3,13 @@
 import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { Info, TrendingUp } from 'lucide-react';
+import { TrendingUp, Sparkles } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dropdown } from '../ui/Dropdown';
 import { metrics } from '../../data/market';
 import { Filters, getChartModel } from '../../utils/marketData';
 
 type SeriesKey = 'ai' | 'docker' | 'avg';
-
-const series: { key: SeriesKey; label: string; color: string; dashed?: boolean; badge: string }[] = [
-  { key: 'ai', label: 'Generative AI Tools', color: '#12B76A', badge: '+45%' },
-  { key: 'docker', label: 'Docker', color: '#1B57E0', badge: '+24%' },
-  { key: 'avg', label: 'Market Average', color: '#94A3B8', dashed: true, badge: '+8%' }
-];
 
 export function GrowthChart({ filters }: { filters: Filters }) {
   const { isAr } = useLanguage();
@@ -26,6 +20,12 @@ export function GrowthChart({ filters }: { filters: Filters }) {
   const model = useMemo(() => getChartModel(filters, metric), [filters, metric]);
   const isVisible = (key: SeriesKey) => !hidden.includes(key);
 
+  const series = [
+    { key: 'ai' as SeriesKey, label: model.seriesLabels.primary, color: '#12B76A', badge: model.badges.ai },
+    { key: 'docker' as SeriesKey, label: model.seriesLabels.secondary, color: '#1B57E0', badge: model.badges.docker },
+    { key: 'avg' as SeriesKey, label: isAr ? 'متوسط السوق' : model.seriesLabels.average, color: '#94A3B8', dashed: true, badge: model.badges.avg },
+  ];
+
   const toggle = (key: SeriesKey) => {
     setHidden((prev) => {
       const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
@@ -34,24 +34,29 @@ export function GrowthChart({ filters }: { filters: Filters }) {
   };
 
   return (
-    <section className="flex h-full flex-col justify-between rounded-[24px] border border-slate-200/90 dark:border-white/10 bg-white dark:bg-[#0B1120] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+    <section className="flex h-full flex-col justify-between rounded-[24px] border border-slate-200/90 dark:border-white/10 bg-white dark:bg-[#0B1120] p-5 sm:p-6 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
       <div>
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 pb-3">
+        <div className="flex items-start justify-between gap-4 pb-3 border-b border-slate-100 dark:border-white/5">
           <div>
-            <h2 className="flex items-center gap-1.5 text-[17px] font-bold text-[#0B132B] dark:text-white">
-              {isAr ? 'المهارات الأكثر نمواً في مصر' : 'Fastest Growing Skills in Egypt'}
-              <Info className="h-4 w-4 text-slate-400" />
-            </h2>
-            <p className="mt-0.5 text-[12.5px] text-slate-500 dark:text-slate-400">
-              {isAr ? 'نسبة النمو في إعلانات الوظائف خلال آخر 90 يوماً' : '% growth in job postings over the last 90 days'}
+            <div className="flex items-center gap-2">
+              <h2 className="text-[17px] font-bold text-[#0B132B] dark:text-white">
+                {isAr ? 'المهارات الأكثر تسارعاً ونمواً' : 'Fastest Growing Tech Skills'}
+              </h2>
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold">
+                <Sparkles className="h-3 w-3" />
+                {isAr ? 'اتجاهات صاعدة' : 'High Velocity'}
+              </span>
+            </div>
+            <p className="mt-1 text-[12.5px] text-slate-500 dark:text-slate-400">
+              {isAr ? 'معدل زيادة الطلب في إعلانات الوظائف خلال آخر 90 يوماً' : '% growth in job postings over the last 90 days'}
             </p>
           </div>
           <Dropdown options={metrics} value={metric} onChange={setMetric} menuWidth="w-[180px]" />
         </div>
 
         {/* Legend Row with Badges */}
-        <div className="mt-2 flex flex-wrap items-center gap-5">
+        <div className="mt-3 flex flex-wrap items-center gap-3.5">
           {series.map((s) => (
             <button
               key={s.key}
@@ -65,12 +70,12 @@ export function GrowthChart({ filters }: { filters: Filters }) {
               }`}
             >
               <span
-                className="h-2 w-5 rounded-full"
+                className="h-2 w-4 rounded-full"
                 style={{ backgroundColor: s.color, opacity: isVisible(s.key) ? 1 : 0.3 }}
               />
-              <span>{s.label}</span>
+              <span className="truncate max-w-[160px]">{s.label}</span>
               <span
-                className="px-1.5 py-0.2 rounded-md text-[11px] font-bold text-white"
+                className="px-1.5 py-0.2 rounded-md text-[10.5px] font-bold text-white shadow-2xs"
                 style={{ backgroundColor: s.color }}
               >
                 {s.badge}
@@ -102,7 +107,7 @@ export function GrowthChart({ filters }: { filters: Filters }) {
                   borderColor: 'rgba(255, 255, 255, 0.1)',
                   borderRadius: '12px',
                   color: '#FFF',
-                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)'
+                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
                 }}
               />
               {isVisible('ai') && (
@@ -140,7 +145,7 @@ export function GrowthChart({ filters }: { filters: Filters }) {
         </div>
       </div>
 
-      {/* Bottom Row Callout matching image */}
+      {/* Bottom Row Callout */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-white/5">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#E8F8F0] dark:bg-emerald-950/70 text-[#12B76A] dark:text-[#34D399] shrink-0">
@@ -149,11 +154,13 @@ export function GrowthChart({ filters }: { filters: Filters }) {
           <p className="text-[12.5px] text-slate-600 dark:text-slate-300">
             {isAr ? (
               <>
-                <strong>أدوات الذكاء الاصطناعي التوليدي</strong> هي المهارة الأسرع نمواً بزيادة طلب <strong className="text-[#12B76A]">45%+</strong> في السوق.
+                <strong>{model.seriesLabels.primary}</strong> هي المهارة الأسرع صعوداً بمعدل زيادة طلب{' '}
+                <strong className="text-[#12B76A]">{model.badges.ai}</strong> في هذا التخصص.
               </>
             ) : (
               <>
-                <strong>Generative AI Tools</strong> is the fastest growing skill with <strong className="text-[#12B76A]">45%</strong> growth in demand.
+                <strong>{model.seriesLabels.primary}</strong> is surging fastest with a{' '}
+                <strong className="text-[#12B76A]">{model.badges.ai}</strong> demand spike.
               </>
             )}
           </p>

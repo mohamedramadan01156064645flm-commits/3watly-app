@@ -15,7 +15,6 @@ const BREADCRUMBS: Record<string, { label: string; labelAr: string }> = {
   '/admin': { label: 'Dashboard', labelAr: 'الواجهة الرئيسية' },
   '/admin/users': { label: 'Users', labelAr: 'المستخدمون' },
   '/admin/resources': { label: 'Resources', labelAr: 'المصادر التعليمية' },
-  '/admin/analytics': { label: 'Analytics', labelAr: 'التحليلات' },
   '/admin/audit-logs': { label: 'Audit Logs', labelAr: 'سجل العمليات' },
   '/admin/settings': { label: 'Settings', labelAr: 'الإعدادات' },
 };

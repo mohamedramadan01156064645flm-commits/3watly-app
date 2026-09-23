@@ -76,7 +76,14 @@ export const SKILLS: Record<string, SkillDefinition> = {
   etl: {
     id: 'etl',
     name: 'ETL Pipelines',
-    aliases: ['ETL', 'ELT', 'data pipeline', 'data pipelines', 'data ingestion'],
+    aliases: [
+      'ETL', 'ELT',
+      'ETL Pipeline', 'ETL Pipelines', 'ETL pipline', 'ETL piplines',
+      'Extract Transform Load', 'Extract, Transform, Load', 'Extract-Transform-Load',
+      'data pipeline', 'data pipelines', 'data pipline', 'data piplines',
+      'data ingestion', 'data extraction', 'data integration',
+      'pipeline', 'pipelines', 'pipline', 'piplines'
+    ],
     tier: 'core',
     hours: 14,
     courses: 4,

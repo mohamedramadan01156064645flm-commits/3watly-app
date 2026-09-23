@@ -14,6 +14,12 @@ import { initialCV } from '../data/cvData';
 import type { CVData, CVVersion, FixId, SaveStatus, TemplateId } from '../types/cv';
 import { analyzeCV, getMarketKeywordsForRole, type Analysis } from '../utils/atsAnalysis';
 import { enhanceBullet } from '../utils/cvHelpers';
+import {
+  addSkillsSmartly,
+  getSmartSkillCategory,
+  normalizeSkillName,
+  areSkillsEquivalent
+} from '../utils/skillTaxonomy';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from './AuthContext';
 
@@ -39,6 +45,7 @@ interface CVContextValue {
   canRedo: boolean;
   analysis: Analysis;
   applyFix: (id: FixId) => Promise<string>;
+  addSkillToActiveCv: (skillName: string, categoryLabel?: string) => Promise<{ success: boolean; categoryLabel: string; isNew: boolean }>;
 
   // Multi-CV Version Management
   versions: CVVersion[];
@@ -1266,25 +1273,11 @@ export function CVProvider({ children }: { children: React.ReactNode }) {
           }
 
           update((prev) => {
-            const skills = [...prev.skills];
-            if (skills.length > 0) {
-              const currentSet = new Set(skills[0].skills.map(s => s.toLowerCase()));
-              const toAdd = missing.filter(m => !currentSet.has(m.toLowerCase()));
-              skills[0] = {
-                ...skills[0],
-                skills: [...skills[0].skills, ...toAdd]
-              };
-            } else {
-              skills.push({
-                id: 'skill-tech',
-                label: 'Technical Skills',
-                skills: missing
-              });
-            }
-            return { ...prev, skills };
+            const smartSkills = addSkillsSmartly(prev.skills, missing, true);
+            return { ...prev, skills: smartSkills };
           }, 'fix-keywords');
 
-          return `تمت إضافة الكلمات المفتاحية الناقصة (${missing.join('، ')}) إلى قسم المهارات التقنية 🎯`;
+          return `تمت إضافة الكلمات المفتاحية الناقصة (${missing.join('، ')}) وتوزيعها بذكاء في أقسامها الصحيحة بالسيرة الذاتية 🎯`;
         }
 
         case 'few-skills': {
@@ -1297,23 +1290,11 @@ export function CVProvider({ children }: { children: React.ReactNode }) {
           }
 
           update((prev) => {
-            const skills = [...prev.skills];
-            if (skills.length > 0) {
-              skills[0] = {
-                ...skills[0],
-                skills: Array.from(new Set([...skills[0].skills, ...toAdd]))
-              };
-            } else {
-              skills.push({
-                id: 'skill-tech',
-                label: 'Technical Skills',
-                skills: toAdd
-              });
-            }
-            return { ...prev, skills };
+            const smartSkills = addSkillsSmartly(prev.skills, toAdd, true);
+            return { ...prev, skills: smartSkills };
           }, 'fix-few-skills');
 
-          return `تمت إضافة ${toAdd.join('، ')} إلى قسم المهارات التقنية لرفع مطابقة الـ ATS 🚀`;
+          return `تمت إضافة ${toAdd.join('، ')} وتوزيعها في الأقسام المخصصة لرفع مطابقة الـ ATS 🚀`;
         }
 
 
@@ -1340,6 +1321,55 @@ export function CVProvider({ children }: { children: React.ReactNode }) {
     [analysis.keywords.missing, activeVersion?.targetRole, update]
   );
 
+  const addSkillToActiveCv = useCallback(
+    async (
+      skillName: string,
+      customCategoryLabel?: string
+    ): Promise<{ success: boolean; categoryLabel: string; isNew: boolean }> => {
+      const canon = normalizeSkillName(skillName);
+      if (!canon) return { success: false, categoryLabel: '', isNew: false };
+
+      let targetLabel = '';
+      let isNew = false;
+
+      update((prev) => {
+        const skills = (prev.skills || []).map((g) => ({ ...g, skills: [...g.skills] }));
+
+        if (customCategoryLabel && customCategoryLabel.trim()) {
+          const trimmedCustom = customCategoryLabel.trim();
+          const existingGroup = skills.find(
+            (g) => g.label.trim().toLowerCase() === trimmedCustom.toLowerCase()
+          );
+          if (existingGroup) {
+            targetLabel = existingGroup.label;
+            if (!existingGroup.skills.some((s) => areSkillsEquivalent(s, canon))) {
+              existingGroup.skills.push(canon);
+            }
+            return { ...prev, skills };
+          } else {
+            isNew = true;
+            targetLabel = trimmedCustom;
+            skills.push({
+              id: `group-${Date.now().toString(36)}`,
+              label: trimmedCustom,
+              skills: [canon]
+            });
+            return { ...prev, skills };
+          }
+        }
+
+        const meta = getSmartSkillCategory(canon, skills, true);
+        targetLabel = meta.targetGroupLabel;
+        isNew = meta.isNewGroup;
+
+        const updated = addSkillsSmartly(skills, [canon], true);
+        return { ...prev, skills: updated };
+      }, 'add-skill-smart');
+
+      return { success: true, categoryLabel: targetLabel, isNew };
+    },
+    [update]
+  );
 
   const value = useMemo(
     () => ({
@@ -1354,6 +1384,7 @@ export function CVProvider({ children }: { children: React.ReactNode }) {
       canRedo: history.future.length > 0,
       analysis,
       applyFix,
+      addSkillToActiveCv,
       versions,
       activeVersionId,
       editingVersionId,
@@ -1378,6 +1409,7 @@ export function CVProvider({ children }: { children: React.ReactNode }) {
       history.future.length,
       analysis,
       applyFix,
+      addSkillToActiveCv,
       versions,
       activeVersionId,
       editingVersionId,

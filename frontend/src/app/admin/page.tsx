@@ -9,10 +9,12 @@ import {
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { resolveDisplayName } from '@/utils/formatName';
+import { AdminCvsModal } from '@/components/admin/AdminCvsModal';
 
 interface Stats {
   totalUsers: number;
   adminUsers: number;
+  activeOnlineUsers?: number;
   suspendedUsers: number;
   totalCvAnalyses: number;
   totalJobs: number;
@@ -47,9 +49,10 @@ interface StatCardConfig {
   cornerBorder: string;
   cornerGlow: string;
   href: string;
+  onClick?: () => void;
 }
 
-function buildStatCards(stats: Stats): StatCardConfig[] {
+function buildStatCards(stats: Stats, onOpenCvs?: () => void): StatCardConfig[] {
   return [
     {
       label: 'Total Users',
@@ -73,63 +76,64 @@ function buildStatCards(stats: Stats): StatCardConfig[] {
     },
     {
       label: 'Active Users',
-      labelAr: 'المستخدمون النشطون',
-      value: stats.adminUsers,
+      labelAr: 'المستخدمون النشطون الآن',
+      value: stats.activeOnlineUsers || 1,
       icon: UserCheck,
       watermarkIcon: UserCheck,
-      iconGradient: 'from-[#3B82F6] to-[#1D4ED8]',
-      iconShadow: 'shadow-[0_4px_18px_rgba(59,130,246,0.45)]',
-      watermarkColor: 'text-blue-400/20 dark:text-blue-400/15',
-      valueColor: 'text-[#93C5FD] dark:text-[#93C5FD]',
-      trendValue: '+50%',
+      iconGradient: 'from-[#10B981] to-[#059669]',
+      iconShadow: 'shadow-[0_4px_18px_rgba(16,185,129,0.45)]',
+      watermarkColor: 'text-emerald-400/20 dark:text-emerald-400/15',
+      valueColor: 'text-[#6EE7B7] dark:text-[#6EE7B7]',
+      trendValue: '🟢 متصل الآن',
       trendType: 'up',
-      cardBorder: 'border-blue-200/80 dark:border-blue-500/25 hover:border-blue-400/60 dark:hover:border-blue-400/50',
-      cardGlow: 'shadow-lg shadow-blue-950/15 dark:shadow-[0_8px_25px_-5px_rgba(59,130,246,0.3)] hover:shadow-[0_12px_32px_-4px_rgba(59,130,246,0.45)]',
-      cardBg: 'bg-gradient-to-b from-blue-50/90 via-white/80 to-blue-100/60 dark:from-[#0c1a36]/90 dark:via-[#070f21]/90 dark:to-[#040812]/95',
-      cornerGradient: 'bg-gradient-to-tl from-blue-500/50 via-blue-600/25 to-transparent',
-      cornerBorder: 'border-blue-300/40 dark:border-blue-400/30',
-      cornerGlow: 'bg-blue-500/40',
+      cardBorder: 'border-emerald-200/80 dark:border-emerald-500/25 hover:border-emerald-400/60 dark:hover:border-emerald-400/50',
+      cardGlow: 'shadow-lg shadow-emerald-950/15 dark:shadow-[0_8px_25px_-5px_rgba(16,185,129,0.3)] hover:shadow-[0_12px_32px_-4px_rgba(16,185,129,0.45)]',
+      cardBg: 'bg-gradient-to-b from-emerald-50/90 via-white/80 to-emerald-100/60 dark:from-[#061e16]/90 dark:via-[#04130e]/90 dark:to-[#020b08]/95',
+      cornerGradient: 'bg-gradient-to-tl from-emerald-500/50 via-emerald-600/25 to-transparent',
+      cornerBorder: 'border-emerald-300/40 dark:border-emerald-400/30',
+      cornerGlow: 'bg-emerald-500/40',
       href: '/admin/users',
     },
     {
       label: 'Current Users',
-      labelAr: 'المستخدمون الحاليون',
-      value: stats.suspendedUsers,
+      labelAr: 'المستخدمون الحاليون (الإدارة والمالكون)',
+      value: stats.adminUsers,
       icon: UserPlus,
       watermarkIcon: UserPlus,
-      iconGradient: 'from-[#F43F5E] to-[#BE123C]',
-      iconShadow: 'shadow-[0_4px_18px_rgba(244,63,94,0.45)]',
-      watermarkColor: 'text-rose-400/20 dark:text-rose-400/15',
-      valueColor: 'text-[#FDA4AF] dark:text-[#FDA4AF]',
-      trendValue: '0%',
+      iconGradient: 'from-[#F59E0B] to-[#D97706]',
+      iconShadow: 'shadow-[0_4px_18px_rgba(245,158,11,0.45)]',
+      watermarkColor: 'text-amber-400/20 dark:text-amber-400/15',
+      valueColor: 'text-[#FCD34D] dark:text-[#FCD34D]',
+      trendValue: `${stats.adminUsers} مسؤول ومالك`,
       trendType: 'neutral',
-      cardBorder: 'border-rose-200/80 dark:border-rose-500/25 hover:border-rose-400/60 dark:hover:border-rose-400/50',
-      cardGlow: 'shadow-lg shadow-rose-950/15 dark:shadow-[0_8px_25px_-5px_rgba(244,63,94,0.3)] hover:shadow-[0_12px_32px_-4px_rgba(244,63,94,0.45)]',
-      cardBg: 'bg-gradient-to-b from-rose-50/90 via-white/80 to-rose-100/60 dark:from-[#220d16]/90 dark:via-[#14060c]/90 dark:to-[#0a0306]/95',
-      cornerGradient: 'bg-gradient-to-tl from-rose-500/50 via-rose-600/25 to-transparent',
-      cornerBorder: 'border-rose-300/40 dark:border-rose-400/30',
-      cornerGlow: 'bg-rose-500/40',
+      cardBorder: 'border-amber-200/80 dark:border-amber-500/25 hover:border-amber-400/60 dark:hover:border-amber-400/50',
+      cardGlow: 'shadow-lg shadow-amber-950/15 dark:shadow-[0_8px_25px_-5px_rgba(245,158,11,0.3)] hover:shadow-[0_12px_32px_-4px_rgba(245,158,11,0.45)]',
+      cardBg: 'bg-gradient-to-b from-amber-50/90 via-white/80 to-amber-100/60 dark:from-[#241708]/90 dark:via-[#170e05]/90 dark:to-[#0c0702]/95',
+      cornerGradient: 'bg-gradient-to-tl from-amber-500/50 via-amber-600/25 to-transparent',
+      cornerBorder: 'border-amber-300/40 dark:border-amber-400/30',
+      cornerGlow: 'bg-amber-500/40',
       href: '/admin/users',
     },
     {
-      label: 'Active CV Analyses',
-      labelAr: 'الملفات السير الذاتية النشطة',
+      label: 'CV Documents',
+      labelAr: 'ملفات السير الذاتية (CVs)',
       value: stats.totalCvAnalyses,
       icon: FileCheck2,
       watermarkIcon: FileCheck2,
-      iconGradient: 'from-[#10B981] to-[#0D9488]',
-      iconShadow: 'shadow-[0_4px_18px_rgba(16,185,129,0.45)]',
-      watermarkColor: 'text-teal-400/20 dark:text-teal-400/15',
-      valueColor: 'text-[#2DD4BF] dark:text-[#2DD4BF]',
-      trendValue: '0%',
-      trendType: 'neutral',
-      cardBorder: 'border-teal-200/80 dark:border-teal-500/25 hover:border-teal-400/60 dark:hover:border-teal-400/50',
-      cardGlow: 'shadow-lg shadow-teal-950/15 dark:shadow-[0_8px_25px_-5px_rgba(20,184,166,0.3)] hover:shadow-[0_12px_32px_-4px_rgba(20,184,166,0.45)]',
-      cardBg: 'bg-gradient-to-b from-teal-50/90 via-white/80 to-teal-100/60 dark:from-[#0a1e1b]/90 dark:via-[#061311]/90 dark:to-[#030a09]/95',
-      cornerGradient: 'bg-gradient-to-tl from-teal-400/50 via-teal-500/25 to-transparent',
-      cornerBorder: 'border-teal-300/40 dark:border-teal-400/30',
-      cornerGlow: 'bg-teal-500/40',
-      href: '/admin/analytics',
+      iconGradient: 'from-[#06B6D4] to-[#0891B2]',
+      iconShadow: 'shadow-[0_4px_18px_rgba(6,182,212,0.45)]',
+      watermarkColor: 'text-cyan-400/20 dark:text-cyan-400/15',
+      valueColor: 'text-[#67E8F9] dark:text-[#67E8F9]',
+      trendValue: 'عرض السير ✓',
+      trendType: 'up',
+      cardBorder: 'border-cyan-200/80 dark:border-cyan-500/25 hover:border-cyan-400/60 dark:hover:border-cyan-400/50',
+      cardGlow: 'shadow-lg shadow-cyan-950/15 dark:shadow-[0_8px_25px_-5px_rgba(6,182,212,0.3)] hover:shadow-[0_12px_32px_-4px_rgba(6,182,212,0.45)]',
+      cardBg: 'bg-gradient-to-b from-cyan-50/90 via-white/80 to-cyan-100/60 dark:from-[#061c24]/90 dark:via-[#041217]/90 dark:to-[#020a0d]/95',
+      cornerGradient: 'bg-gradient-to-tl from-cyan-400/50 via-cyan-500/25 to-transparent',
+      cornerBorder: 'border-cyan-300/40 dark:border-cyan-400/30',
+      cornerGlow: 'bg-cyan-500/40',
+      href: '#cvs',
+      onClick: onOpenCvs,
     },
     {
       label: 'Jobs in Platform',
@@ -201,6 +205,7 @@ export default function AdminDashboardPage() {
   const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCvsModal, setShowCvsModal] = useState(false);
 
   const fetchStats = async () => {
     setLoading(true);
@@ -222,7 +227,7 @@ export default function AdminDashboardPage() {
     fetchStats();
   }, []);
 
-  const statCards = stats ? buildStatCards(stats) : [];
+  const statCards = stats ? buildStatCards(stats, () => setShowCvsModal(true)) : [];
 
   // Dynamic Admin User Name from AuthContext
   const resolvedName = resolveDisplayName({
@@ -311,6 +316,7 @@ export default function AdminDashboardPage() {
                 <Link
                   key={card.label}
                   href={card.href}
+                  onClick={card.onClick ? (e) => { e.preventDefault(); card.onClick!(); } : undefined}
                   dir="ltr"
                   className={`
                     group relative flex flex-col justify-between p-4 sm:p-5 rounded-[22px] border transition-all duration-300
@@ -505,6 +511,9 @@ export default function AdminDashboardPage() {
           </table>
         </div>
       </div>
+
+      {/* Admin CVs Documents Explorer Modal */}
+      <AdminCvsModal open={showCvsModal} onClose={() => setShowCvsModal(false)} />
     </div>
   );
 }

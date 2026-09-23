@@ -30,7 +30,7 @@ export function TopMetricsBanner({ plan, onChangeTarget }: TopMetricsBannerProps
               {isAr ? "المسمى المستهدف" : "Target Role"}
             </span>
             <h3 className="text-base font-bold text-slate-900 dark:text-white leading-tight truncate">
-              {plan.role?.name || "Data Engineer"}
+              {(isAr ? plan.role?.nameAr : plan.role?.name) || plan.role?.name || (isAr ? "مهندس بيانات" : "Data Engineer")}
             </h3>
           </div>
         </div>

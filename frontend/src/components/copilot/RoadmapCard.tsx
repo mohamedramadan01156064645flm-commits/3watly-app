@@ -1,20 +1,15 @@
 "use client";
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ExternalLink, Check, Clock, TrendingUp } from 'lucide-react';
+import { ExternalLink, Check, Clock } from 'lucide-react';
 import { roadmapWeeks } from '../../data/roadmap';
-import { Modal } from '../ui/Modal';
+import { PremiumSkillPlanModal } from '../skills/PremiumSkillPlanModal';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export function RoadmapCard() {
   const { isAr } = useLanguage();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState<number[]>([]);
-
-  const toggleWeek = (step: number) =>
-    setDone((prev) => (prev.includes(step) ? prev.filter((s) => s !== step) : [...prev, step]));
 
   return (
     <section className="rounded-2xl border border-slate-200/90 dark:border-white/10 bg-white dark:bg-[#0B1120] p-5 shadow-xs">
@@ -32,14 +27,14 @@ export function RoadmapCard() {
           onClick={() => setOpen(true)}
           className="flex h-[34px] items-center gap-1.5 rounded-xl border border-blue-200 dark:border-blue-800/40 bg-white dark:bg-white/5 px-3 text-[12.5px] font-bold text-[#1B57E0] dark:text-[#60A5FA] hover:bg-blue-50 dark:hover:bg-white/10 transition-colors cursor-pointer"
         >
-          <span>{isAr ? "عرض الخارطة الكاملة" : "View Full Roadmap"}</span>
+          <span>{isAr ? "عرض الخطة كاملة" : "View Full Plan"}</span>
           <ExternalLink className="h-3.5 w-3.5" />
         </button>
       </header>
 
       {/* Responsive Grid of Weeks without horizontal scroll cutoffs */}
       <ol className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {roadmapWeeks.map((w, i) => {
+        {roadmapWeeks.map((w) => {
           const complete = done.includes(w.step);
           return (
             <li key={w.step} className="flex flex-col">
@@ -91,22 +86,7 @@ export function RoadmapCard() {
         <span className="font-black text-emerald-600 dark:text-emerald-400">28k – 35k EGP ↑</span>
       </div>
 
-      {open && (
-        <Modal open={open} onClose={() => setOpen(false)} title="Complete Career Roadmap">
-          <div className="space-y-4 max-h-[70vh] overflow-y-auto p-1">
-            {roadmapWeeks.map((w) => (
-              <div key={w.step} className="flex items-start gap-4 p-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#070C18]">
-                <img src={w.icon} alt="" className="h-10 w-10 object-contain shrink-0" />
-                <div>
-                  <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase">{w.week}</span>
-                  <h4 className="text-[15px] font-bold text-slate-900 dark:text-white">{w.title}</h4>
-                  <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-1">{w.detail}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Modal>
-      )}
+      <PremiumSkillPlanModal open={open} onClose={() => setOpen(false)} />
     </section>
   );
 }
